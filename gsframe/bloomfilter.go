@@ -6,50 +6,50 @@ import (
 	"unsafe"
 )
 
-type BloomFilter[T uint | uint8 | uint16 | uint32 | uint64] interface {
-	Add(flag T)
-	Exists(flag T) (bool, error)
+type BloomFilter interface {
+	Add(flag uint32)
+	Exists(flag uint32) (bool, error)
 	ToJson() string
 	Full() bool
 }
 
-type bloomFilter[T uint | uint8 | uint16 | uint32 | uint64] struct {
-	Flags          []T
-	Count          T
-	Flag_bits_size T
-	FlagCount      T
-	FlagTotal      T
+type bloomFilter struct {
+	Flags          []uint64
+	Count          uint32
+	Flag_bits_size uint32
+	FlagCount      uint32
+	FlagTotal      uint32
 }
 
-func NewBloomFilter[T uint | uint8 | uint16 | uint32 | uint64](bitssize int) *bloomFilter[T] {
-	temp := T(0)
-	size := T(unsafe.Sizeof(temp) * 8)
-	count := int(math.Ceil(float64(bitssize) / float64(size)))
-	bf := &bloomFilter[T]{
-		Flags:          make([]T, count),
-		Count:          T(count),
+func NewBloomFilter(bitssize uint32) *bloomFilter {
+	temp := uint64(0)
+	size := uint32(unsafe.Sizeof(temp) * 8)
+	count := uint32(math.Ceil(float64(bitssize) / float64(size)))
+	bf := &bloomFilter{
+		Flags:          make([]uint64, count),
+		Count:          count,
 		Flag_bits_size: size,
 		FlagCount:      0,
-		FlagTotal:      T(bitssize),
+		FlagTotal:      bitssize,
 	}
 	return bf
 }
 
-func NewBloomFilterFromJsonData[T uint | uint8 | uint16 | uint32 | uint64](bytes string) *bloomFilter[T] {
-	bf := &bloomFilter[T]{}
+func NewBloomFilterFromJsonData(bytes string) *bloomFilter {
+	bf := &bloomFilter{}
 	if err := FromJson(bytes, bf); err != nil {
 		return nil
 	}
 	return bf
 }
 
-func (bf *bloomFilter[T]) getIndex(flag T) (arr_index, idx T) {
+func (bf *bloomFilter) getIndex(flag uint32) (arr_index, idx uint32) {
 	arr_index = flag / bf.Flag_bits_size
 	idx = flag % bf.Flag_bits_size
 	return
 }
 
-func (bf *bloomFilter[T]) Add(flag T) {
+func (bf *bloomFilter) Add(flag uint32) {
 	arr_index, idx := bf.getIndex(flag)
 	if arr_index >= bf.Count {
 		return
@@ -57,9 +57,9 @@ func (bf *bloomFilter[T]) Add(flag T) {
 	if idx >= bf.Flag_bits_size {
 		return
 	}
-	n := T(1) << idx
+	n := uint64(1) << idx
 	fg := bf.Flags[arr_index]
-	bit := (n & fg)
+	bit := n & fg
 	exists := bit > 0
 	if !exists {
 		bf.FlagCount++
@@ -67,7 +67,7 @@ func (bf *bloomFilter[T]) Add(flag T) {
 	}
 }
 
-func (bf *bloomFilter[T]) Exists(flag T) (bool, error) {
+func (bf *bloomFilter) Exists(flag uint32) (bool, error) {
 	arr_index, idx := bf.getIndex(flag)
 	if arr_index >= bf.Count {
 		return false, errors.New("arr index error")
@@ -75,18 +75,18 @@ func (bf *bloomFilter[T]) Exists(flag T) (bool, error) {
 	if idx >= bf.Flag_bits_size {
 		return false, errors.New("idx error")
 	}
-	n := T(1) << idx
+	n := uint64(1) << idx
 	fg := bf.Flags[arr_index]
-	bit := (n & fg)
+	bit := n & fg
 
 	exists := bit > 0
 	return exists, nil
 }
 
-func (bf *bloomFilter[T]) ToJson() string {
+func (bf *bloomFilter) ToJson() string {
 	return ToJson(bf)
 }
 
-func (bf *bloomFilter[T]) Full() bool {
+func (bf *bloomFilter) Full() bool {
 	return bf.FlagCount >= bf.FlagTotal
 }
