@@ -79,6 +79,7 @@ func (bf *bloomFilter) Remove(flag uint32) {
 	bit := n & fg
 	exists := bit > 0
 	if exists {
+		bf.FlagCount--
 		bf.Flags[arr_index] ^= n
 	}
 }
