@@ -66,7 +66,22 @@ func (bf *bloomFilter) Add(flag uint32) {
 		bf.Flags[arr_index] |= n
 	}
 }
-
+func (bf *bloomFilter) Remove(flag uint32) {
+	arr_index, idx := bf.getIndex(flag)
+	if arr_index >= bf.Count {
+		return
+	}
+	if idx >= bf.Flag_bits_size {
+		return
+	}
+	n := uint64(1) << idx
+	fg := bf.Flags[arr_index]
+	bit := n & fg
+	exists := bit > 0
+	if exists {
+		bf.Flags[arr_index] ^= n
+	}
+}
 func (bf *bloomFilter) Exists(flag uint32) (bool, error) {
 	arr_index, idx := bf.getIndex(flag)
 	if arr_index >= bf.Count {
@@ -82,7 +97,6 @@ func (bf *bloomFilter) Exists(flag uint32) (bool, error) {
 	exists := bit > 0
 	return exists, nil
 }
-
 func (bf *bloomFilter) ToJson() string {
 	return ToJson(bf)
 }
