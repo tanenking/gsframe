@@ -73,6 +73,17 @@ func NewConnection(server gsinf.IServer, conn *net.TCPConn, connID uint32, msgHa
 		groupMap:    sync.Map{},
 	}
 
+	// 开启 NoDelay: 关闭Nagle, 小包立即发送
+	_ = conn.SetNoDelay(zcommon.GlobalObject.NoDelay)
+
+	// 设置读写缓冲区
+	_ = conn.SetReadBuffer(int(zcommon.GlobalObject.TcpReadWriteBufferSize))
+	_ = conn.SetWriteBuffer(int(zcommon.GlobalObject.TcpReadWriteBufferSize))
+
+	// 开启 TCP Keepalive
+	_ = conn.SetKeepAlive(true)
+	_ = conn.SetKeepAlivePeriod(30 * time.Second)
+
 	return c
 }
 

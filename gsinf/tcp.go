@@ -98,7 +98,10 @@ type TcpGlobalConfig_t struct {
 	Host      string  //当前服务器主机IP
 	TCPPort   int     //当前服务器主机监听端口号
 
-	MaxPacketSize uint32 //都需数据包的最大值
+	GoReadWriteBufferSize  uint32 //go缓冲区大小
+	TcpReadWriteBufferSize uint32 //tcp缓冲区大小
+
+	MaxPacketSize uint32 //数据包的最大值
 	MaxConn       int    //当前服务器主机允许的最大链接个数
 	MaxMsgChanLen uint32 //SendBuffMsg发送消息的缓冲最大长度
 
@@ -106,4 +109,6 @@ type TcpGlobalConfig_t struct {
 
 	ReadTimeout  time.Duration //读超时时间
 	WriteTimeout time.Duration //写超时时间
+
+	NoDelay bool
 }

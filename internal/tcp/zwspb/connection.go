@@ -84,6 +84,20 @@ func NewConnection(server gsinf.IServer, conn *websocket.Conn, connID uint32, ms
 	}
 	c.real_ip = real_ip
 
+	tcpConn, ok := conn.UnderlyingConn().(*net.TCPConn)
+	if ok {
+		// 开启 NoDelay: 关闭Nagle, 小包立即发送
+		_ = tcpConn.SetNoDelay(zcommon.GlobalObject.NoDelay)
+
+		// 设置读写缓冲区
+		_ = tcpConn.SetReadBuffer(int(zcommon.GlobalObject.TcpReadWriteBufferSize))
+		_ = tcpConn.SetWriteBuffer(int(zcommon.GlobalObject.TcpReadWriteBufferSize))
+
+		// TCP Keepalive
+		_ = tcpConn.SetKeepAlive(true)
+		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
+
 	return c
 }
 

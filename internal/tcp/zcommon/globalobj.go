@@ -17,13 +17,16 @@ var GlobalObject *gsinf.TcpGlobalConfig_t
 func init() {
 	//初始化GlobalObject变量，设置一些默认值
 	GlobalObject = &gsinf.TcpGlobalConfig_t{
-		TCPPort:       8999,
-		Host:          "0.0.0.0",
-		MaxConn:       12000,
-		MaxPacketSize: 8192,
-		MaxMsgChanLen: 128,
-		ReadTimeout:   time.Minute,
-		WriteTimeout:  time.Second * 10,
+		TCPPort:                8999,
+		Host:                   "0.0.0.0",
+		MaxConn:                12000,
+		GoReadWriteBufferSize:  4096,
+		TcpReadWriteBufferSize: 256 * 1024, //256k
+		MaxPacketSize:          8192,
+		MaxMsgChanLen:          128,
+		ReadTimeout:            time.Minute,
+		WriteTimeout:           time.Second * 10,
+		NoDelay:                true,
 	}
 }
 
