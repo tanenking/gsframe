@@ -3,7 +3,7 @@
 
 package logx
 
-func colorPrint(s string, i int) {
-}
-func initKernel32() {
-}
+// func colorPrint(s string, i int) {
+// }
+// func initKernel32() {
+// }

@@ -2,7 +2,7 @@ package zcommon
 
 import (
 	"github.com/tanenking/gsframe/gsinf"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 // MsgHandle -
@@ -34,7 +34,7 @@ func (mh *MsgHandle) DoMsgHandler(request gsinf.IRequest) {
 		}
 	}
 	if handler == nil {
-		logx.DebugF("api msgID = %s is not FOUND!", request.GetMsgID())
+		logger.Log().Debug("api msgID = %s is not FOUND!", request.GetMsgID())
 		return
 	}
 
@@ -54,7 +54,7 @@ func (mh *MsgHandle) RegisterRouter(msgID string, router gsinf.IRouter) {
 	}
 	//2 添加msg与api的绑定关系
 	mh.Apis[msgID] = router
-	logx.DebugF("Add api msgID = %s", msgID)
+	logger.Log().Debug("Add api msgID = %s", msgID)
 }
 
 // 路由功能: 没有指定的消息,都通过这个处理

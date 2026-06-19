@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 
 	"golang.org/x/time/rate"
 )
@@ -26,7 +26,7 @@ func init() {
 }
 
 func PrintLogo() {
-	logx.DebugF("MaxConn: %d, MaxPacketSize: %d\n",
+	logger.Log().Debug("MaxConn: %d, MaxPacketSize: %d\n",
 		GlobalObject.MaxConn,
 		GlobalObject.MaxPacketSize)
 }

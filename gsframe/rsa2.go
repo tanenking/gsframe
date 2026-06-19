@@ -11,7 +11,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 const (
@@ -88,13 +88,13 @@ func Rsa2PubSign(signContent, sign, publicKey string, hash crypto.Hash) bool {
 	hashed := sha256.Sum256([]byte(signContent))
 	pubKey, err := ParsePublicKey(publicKey)
 	if err != nil {
-		logx.ErrorF("rsa2 public check sign failed. err = %v", err)
+		logger.Log().Error("rsa2 public check sign failed. err = %v", err)
 		return false
 	}
 	sig, _ := base64.StdEncoding.DecodeString(sign)
 	err = rsa.VerifyPKCS1v15(pubKey, hash, hashed[:], sig)
 	if err != nil {
-		logx.ErrorF("rsa2 public check sign failed. err = %v", err)
+		logger.Log().Error("rsa2 public check sign failed. err = %v", err)
 		return false
 	}
 	return true

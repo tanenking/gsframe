@@ -7,7 +7,7 @@ import (
 
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/tcp/zcommon"
 
 	"github.com/gin-gonic/gin"
@@ -67,7 +67,7 @@ func (s *Server) handshake(c *gin.Context) {
 	if websocket.IsWebSocketUpgrade(c.Request) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, c.Writer.Header())
 		if err != nil {
-			logx.ErrorF("upgrade err -> : %v", err)
+			logger.Log().Error("upgrade err -> : %v", err)
 			return
 		}
 		if s.Closing || constants.GetSystemStatus() == gsinf.SystemStatus_Maintain {
@@ -77,7 +77,7 @@ func (s *Server) handshake(c *gin.Context) {
 
 		//3.2 设置服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
 		if s.ConnMgr.Len() >= zcommon.GlobalObject.MaxConn {
-			logx.ErrorF("当前连接数量超过最大值,放弃新连接")
+			logger.Log().Error("当前连接数量超过最大值,放弃新连接")
 			conn.Close()
 		}
 
@@ -90,7 +90,7 @@ func (s *Server) handshake(c *gin.Context) {
 		}
 		dealConn := NewConnection(s, conn, id, s.msgHandler, c.ClientIP())
 		if !s.CallOnPreValidate(dealConn) {
-			logx.ErrorF("%s 连接前置验证失败, 丢弃连接", dealConn.ClientAddress())
+			logger.Log().Error("%s 连接前置验证失败, 丢弃连接", dealConn.ClientAddress())
 			conn.Close()
 			return
 		}
@@ -108,7 +108,7 @@ func (s *Server) handshake(c *gin.Context) {
 		//3.4 启动当前链接的处理业务
 		constants.Go(func() { dealConn.Start() })
 	} else {
-		logx.ErrorF("不是websocket请求")
+		logger.Log().Error("不是websocket请求")
 	}
 }
 
@@ -128,7 +128,7 @@ func (s *Server) Start() {
 		}
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logx.ErrorF("ListenAndServe %v", err)
+			logger.Log().Error("ListenAndServe %v", err)
 		}
 	})
 }
@@ -180,7 +180,7 @@ func (s *Server) SetOnConnPreValidate(validate gsinf.IConnPreValidate) {
 // CallOnConnStart 调用连接OnConnStart Hook函数
 func (s *Server) CallOnConnStart(conn gsinf.IConnection) {
 	if s.OnConnStart != nil {
-		logx.DebugF("---> CallOnConnStart....%d", conn.GetConnID())
+		logger.Log().Debug("---> CallOnConnStart....%d", conn.GetConnID())
 		s.OnConnStart(conn)
 	}
 }
@@ -188,7 +188,7 @@ func (s *Server) CallOnConnStart(conn gsinf.IConnection) {
 // CallOnConnStop 调用连接OnConnStop Hook函数
 func (s *Server) CallOnConnStop(conn gsinf.IConnection) {
 	if s.OnConnStop != nil {
-		logx.DebugF("---> CallOnConnStop....%d", conn.GetConnID())
+		logger.Log().Debug("---> CallOnConnStop....%d", conn.GetConnID())
 		s.OnConnStop(conn)
 	}
 }

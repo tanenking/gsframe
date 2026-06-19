@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 const (
@@ -76,7 +76,7 @@ func DoPost(Domain string, headers map[string]string, params map[string]string, 
 
 		req, err := http.NewRequest("POST", urlPath, strings.NewReader(data))
 		if err != nil {
-			logx.ErrorF("DoPost NewRequest err = %v", err)
+			logger.Log().Error("DoPost NewRequest err = %v", err)
 			return
 		}
 		if len(headers) > 0 {
@@ -84,19 +84,19 @@ func DoPost(Domain string, headers map[string]string, params map[string]string, 
 				req.Header.Set(k, v)
 			}
 		}
-		// logx.DebugF("DoPost Domain = %s", Domain)
-		// logx.DebugF("DoPost data = %s", data)
+		// logger.Log().Debug("DoPost Domain = %s", Domain)
+		// logger.Log().Debug("DoPost data = %s", data)
 
 		resp, err = client.Do(req)
 		if err != nil {
-			logx.ErrorF("DoPost client.Do err = %v", err)
+			logger.Log().Error("DoPost client.Do err = %v", err)
 			return
 		}
 		defer resp.Body.Close()
 
 		response, err = ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			logx.ErrorF("DoPost StatusCode = %d, status = %s, resp msg = %+v", resp.StatusCode, resp.Status, string(response))
+			logger.Log().Error("DoPost StatusCode = %d, status = %s, resp msg = %+v", resp.StatusCode, resp.Status, string(response))
 		}
 	})
 	<-wait
@@ -124,11 +124,11 @@ func DoGet(Domain string, headers map[string]string, params map[string]string) (
 		}
 		Url.RawQuery += querys.Encode()
 		urlPath := Url.String()
-		// logx.DebugF("urlPath = %s", urlPath)
+		// logger.Log().Debug("urlPath = %s", urlPath)
 
 		req, err := http.NewRequest("GET", urlPath, nil)
 		if err != nil {
-			logx.ErrorF("DoGet NewRequest err = %v", err)
+			logger.Log().Error("DoGet NewRequest err = %v", err)
 			return
 		}
 		if len(headers) > 0 {
@@ -138,14 +138,14 @@ func DoGet(Domain string, headers map[string]string, params map[string]string) (
 		}
 		resp, err = client.Do(req)
 		if err != nil {
-			logx.ErrorF("DoGet client.Do err = %v", err)
+			logger.Log().Error("DoGet client.Do err = %v", err)
 			return
 		}
 		defer resp.Body.Close()
 
 		response, err = ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			logx.ErrorF("DoGet StatusCode = %d, status = %s, resp msg = %+v", resp.StatusCode, resp.Status, string(response))
+			logger.Log().Error("DoGet StatusCode = %d, status = %s, resp msg = %+v", resp.StatusCode, resp.Status, string(response))
 		}
 	})
 	<-wait
@@ -173,7 +173,7 @@ func DoGetDirect(Domain string, headers map[string]string, query string) (resp *
 
 		req, err := http.NewRequest("GET", urlPath, nil)
 		if err != nil {
-			logx.ErrorF("DoGetDirect NewRequest err = %v", err)
+			logger.Log().Error("DoGetDirect NewRequest err = %v", err)
 			return
 		}
 		if len(headers) > 0 {
@@ -183,12 +183,12 @@ func DoGetDirect(Domain string, headers map[string]string, query string) (resp *
 		}
 		resp, err = client.Do(req)
 		if err != nil {
-			logx.ErrorF("DoGetDirect client.Do err = %v", err)
+			logger.Log().Error("DoGetDirect client.Do err = %v", err)
 			return
 		}
 		response, err = ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			logx.ErrorF("DoGetDirect StatusCode = %d, status = %s, resp msg = %+v", resp.StatusCode, resp.Status, string(response))
+			logger.Log().Error("DoGetDirect StatusCode = %d, status = %s, resp msg = %+v", resp.StatusCode, resp.Status, string(response))
 		}
 	})
 	<-wait

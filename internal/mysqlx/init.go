@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/tanenking/gsframe/gsinf"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -44,14 +44,14 @@ func InitMysqlHelper(configs map[string]*gsinf.MysqlConfig) error {
 		cfg.Name = name
 		cli, err := makeMysql(cfg)
 		if err != nil {
-			logx.ErrorF("makeMysql err -> %v", err)
+			logger.Log().Error("makeMysql err -> %v", err)
 			return err
 		}
 		Mysql.mysqls[cfg.Name] = cli
-		logx.InfoF("mysql helper [ %s ] create success", cfg.Name)
+		logger.Log().Info("mysql helper [ %s ] create success", cfg.Name)
 	}
 
-	logx.InfoF("InitMysqlHelper success")
+	logger.Log().Info("InitMysqlHelper success")
 	return nil
 }
 

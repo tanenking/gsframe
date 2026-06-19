@@ -8,7 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	uuid "github.com/satori/go.uuid"
 	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 func (r *redis_t) AutoLock(key string, fn func()) {
@@ -43,7 +43,7 @@ func (r *redis_t) AutoLock(key string, fn func()) {
 func (r *redis_t) GetI(key string) (val int64, err error) {
 	sval, err := r.Get(context.Background(), key).Result()
 	if RedisError(err) {
-		logx.ErrorF(`RedisGetI key %+v, err %+v`, key, err)
+		logger.Log().Error(`RedisGetI key %+v, err %+v`, key, err)
 		return
 	}
 	if len(sval) <= 0 {
@@ -51,7 +51,7 @@ func (r *redis_t) GetI(key string) (val int64, err error) {
 	}
 	val, err = strconv.ParseInt(sval, 10, 64)
 	if err != nil {
-		logx.ErrorF(`RedisGetI key %+v, err %+v`, key, err)
+		logger.Log().Error(`RedisGetI key %+v, err %+v`, key, err)
 		return
 	}
 	return
@@ -60,7 +60,7 @@ func (r *redis_t) GetI(key string) (val int64, err error) {
 func (r *redis_t) HGetI(key string, field string) (val int64, err error) {
 	sval, err := r.HGet(context.Background(), key, field).Result()
 	if RedisError(err) {
-		logx.ErrorF(`RedisHGetI key %+v, field %+v, err %+v`, key, field, err)
+		logger.Log().Error(`RedisHGetI key %+v, field %+v, err %+v`, key, field, err)
 		return
 	}
 	if len(sval) <= 0 {
@@ -68,7 +68,7 @@ func (r *redis_t) HGetI(key string, field string) (val int64, err error) {
 	}
 	val, err = strconv.ParseInt(sval, 10, 64)
 	if err != nil {
-		logx.ErrorF(`RedisHGetI key %+v, err %+v`, key, err)
+		logger.Log().Error(`RedisHGetI key %+v, err %+v`, key, err)
 		return
 	}
 	return
@@ -78,7 +78,7 @@ func (r *redis_t) HGetI(key string, field string) (val int64, err error) {
 
 func (r *redis_t) CompileScript(script string) *redis.Script {
 	if r.rdb_cluster != nil {
-		logx.ErrorF(`redis lua script not allow run in cluster env`)
+		logger.Log().Error(`redis lua script not allow run in cluster env`)
 		return nil
 	}
 	return redis.NewScript(script)
@@ -86,13 +86,13 @@ func (r *redis_t) CompileScript(script string) *redis.Script {
 
 func (r *redis_t) RunScript(script *redis.Script, keys []string, args ...interface{}) (ret []interface{}) {
 	if r.rdb_cluster != nil {
-		logx.ErrorF(`redis lua script not allow run in cluster env`)
+		logger.Log().Error(`redis lua script not allow run in cluster env`)
 		return nil
 	}
 	cmd := script.Run(context.Background(), r, keys, args...)
 	rt, err := cmd.Result()
 	if err != nil && err != redis.Nil {
-		logx.ErrorF("RunScript, err = %v", err)
+		logger.Log().Error("RunScript, err = %v", err)
 		return nil
 	}
 	ret, ok := rt.([]interface{})

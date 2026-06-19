@@ -12,7 +12,7 @@ import (
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/helper"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 func IsNil(x interface{}) bool {
@@ -60,7 +60,7 @@ func Struct2Map(input interface{}) (out map[string]interface{}, err error) {
 	out = map[string]interface{}{}
 	err = mapstructure.Decode(input, &out)
 	if err != nil {
-		logx.ErrorF("Struct2Map err -> %v", err)
+		logger.Log().Error("Struct2Map err -> %v", err)
 	}
 	return
 }

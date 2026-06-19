@@ -10,7 +10,7 @@ import (
 
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/tcp/zcommon"
 
 	"golang.org/x/time/rate"
@@ -108,8 +108,8 @@ func (c *Connection) GetGroupList() []string {
 
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *Connection) StartWriter() {
-	logx.DebugF("[Writer Goroutine is running]")
-	defer logx.DebugF("%s [conn Writer exit!]", c.ClientIP())
+	logger.Log().Debug("[Writer Goroutine is running]")
+	defer logger.Log().Debug("%s [conn Writer exit!]", c.ClientIP())
 	defer c.Stop()
 
 	//20秒检测一次,180秒视为连接关闭,20秒无player属性视为非法
@@ -126,10 +126,10 @@ func (c *Connection) StartWriter() {
 		case <-_keeptimer.C:
 			c.keepalive++
 			if c.keepalive >= 9 {
-				logx.ErrorF("tcp心跳超时")
+				logger.Log().Error("tcp心跳超时")
 				return
 			} else if !c.IsValid() {
-				logx.ErrorF("tcp连接20秒内都没有绑定player")
+				logger.Log().Error("tcp连接20秒内都没有绑定player")
 				return
 			}
 			_keeptimer.Reset(interval_impl)
@@ -137,11 +137,11 @@ func (c *Connection) StartWriter() {
 			if ok {
 				//有数据要写给客户端
 				if _, err := c.Conn.Write(data); err != nil {
-					logx.DebugF("Send Buff Data error:, %+v", err)
+					logger.Log().Error("Send Buff Data error:, %+v", err)
 					return
 				}
 			} else {
-				logx.DebugF("msgBuffChan is Closed")
+				logger.Log().Debug("msgBuffChan is Closed")
 				return
 			}
 		case <-gmsg.C:
@@ -163,8 +163,8 @@ func (c *Connection) StartWriter() {
 
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *Connection) StartReader() {
-	logx.DebugF("[Reader Goroutine is running]")
-	defer logx.DebugF("%s [conn Reader exit!]", c.ClientIP())
+	logger.Log().Debug("[Reader Goroutine is running]")
+	defer logger.Log().Debug("%s [conn Reader exit!]", c.ClientIP())
 	defer c.Stop()
 
 	// 创建拆包解包的对象
@@ -175,7 +175,7 @@ func (c *Connection) StartReader() {
 		default:
 			err := c.rdpkg.ReadFromConn(c.Conn)
 			if err != nil {
-				logx.ErrorF("%v", err)
+				logger.Log().Error("%v", err)
 				return
 			}
 			if c.rdpkg.Success() {
@@ -187,7 +187,7 @@ func (c *Connection) StartReader() {
 					defer c.rdpkg.Clear()
 					err := zcommon.Unpack(c.rdpkg, msg)
 					if err != nil {
-						logx.ErrorF("Unpack %v", err)
+						logger.Log().Error("Unpack %v", err)
 						return
 					}
 					req := zcommon.RequestPool.Get().(*zcommon.Request)
@@ -219,7 +219,7 @@ func (c *Connection) sendRest() {
 		}
 		c.Conn.Write(data)
 	}
-	logx.DebugF("sendRest conn id = %d", c.ConnID)
+	logger.Log().Debug("sendRest conn id = %d", c.ConnID)
 }
 
 // Start 启动连接，让当前连接开始工作
@@ -290,7 +290,7 @@ func (c *Connection) SendBuffMsg(ctx context.Context, msgID string, data []byte)
 	//将data封包，并且发送
 	bytes, err := zcommon.Pack(zcommon.NewMsgPackage(msgID, data, constants.ParseSeq(ctx)))
 	if err != nil {
-		logx.DebugF("Pack error msg ID = %s", msgID)
+		logger.Log().Error("Pack error msg ID = %s, err = %+v", msgID, err)
 		return errors.New("pack error msg ")
 	}
 	//写回客户端
@@ -339,7 +339,7 @@ func (c *Connection) finalizer() {
 		return
 	}
 
-	logx.DebugF("Conn Stop()...ConnID = %d", c.ConnID)
+	logger.Log().Debug("Conn Stop()...ConnID = %d", c.ConnID)
 
 	// 关闭socket链接
 	_ = c.Conn.Close()

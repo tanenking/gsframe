@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/tanenking/gsframe/gsinf"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -35,32 +35,32 @@ func makeMysql(cfg *gsinf.MysqlConfig) (cli *mysqlClient_t, err error) {
 		return
 	}
 
-	logx.InfoF("mysql conn success -> %s", dbDSN)
+	logger.Log().Info("mysql conn success -> %s", dbDSN)
 	return
 }
 
 func (m *mysqlClient_t) _update_or_delete(query string, args ...interface{}) (rowsAffected int64, err error) {
 	if m.mysqlDB == nil {
 		err = fmt.Errorf("mysqlDB %s not init", m.Name)
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	ts := strings.TrimSpace(query)
 	flag := strings.ToLower(ts[0:6])
 	if strings.Compare(flag, "update") != 0 && strings.Compare(flag, "delete") != 0 {
 		err = fmt.Errorf("this function just run update or delete")
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	var ret sql.Result
 	ret, err = m.mysqlDB.Exec(query, args...)
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	rowsAffected, err = ret.RowsAffected()
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	return
@@ -75,7 +75,7 @@ func (m *mysqlClient_t) TableExists(table_name string) bool {
 	sql := fmt.Sprintf(`select count(*) from information_schema.tables where TABLE_SCHEMA = '%s' and TABLE_NAME = '%s' limit 1`, m.Name, table_name)
 	err, has := m.Get(&count, sql)
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", sql, err)
+		logger.Log().Error("sql = %s, err = %v", sql, err)
 		return false
 	}
 	if !has {
@@ -88,12 +88,12 @@ func (m *mysqlClient_t) TableExists(table_name string) bool {
 func (m *mysqlClient_t) Exec(sql string, args ...interface{}) (res sql.Result, err error) {
 	if m.mysqlDB == nil {
 		err = fmt.Errorf("mysqlDB %s not init", m.Name)
-		logx.ErrorF("sql = %s, err = %v", sql, err)
+		logger.Log().Error("sql = %s, err = %v", sql, err)
 		return
 	}
 	res, err = m.mysqlDB.Exec(sql, args...)
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", sql, err)
+		logger.Log().Error("sql = %s, err = %v", sql, err)
 	}
 	return
 }
@@ -101,7 +101,7 @@ func (m *mysqlClient_t) Exec(sql string, args ...interface{}) (res sql.Result, e
 func (m *mysqlClient_t) Get(data interface{}, query string, args ...interface{}) (err error, has bool) {
 	if m.mysqlDB == nil {
 		err = fmt.Errorf("mysqlDB %s not init", m.Name)
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	err = m.mysqlDB.Get(data, query, args...)
@@ -111,7 +111,7 @@ func (m *mysqlClient_t) Get(data interface{}, query string, args ...interface{})
 			has = false
 			return
 		}
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	has = true
@@ -121,12 +121,12 @@ func (m *mysqlClient_t) Get(data interface{}, query string, args ...interface{})
 func (m *mysqlClient_t) Select(arr interface{}, query string, args ...interface{}) (err error) {
 	if m.mysqlDB == nil {
 		err = fmt.Errorf("mysqlDB %s not init", m.Name)
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	err = m.mysqlDB.Select(arr, query, args...)
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	return
@@ -142,25 +142,25 @@ func (m *mysqlClient_t) Update(query string, args ...interface{}) (rowsAffected 
 func (m *mysqlClient_t) Insert(query string, args ...interface{}) (lastInsertID int64, err error) {
 	if m.mysqlDB == nil {
 		err = fmt.Errorf("mysqlDB %s not init", m.Name)
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	ts := strings.TrimSpace(query)
 	flag := strings.ToLower(ts[0:6])
 	if strings.Compare(flag, "insert") != 0 {
 		err = fmt.Errorf("this function just run insert")
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	var ret sql.Result
 	ret, err = m.mysqlDB.Exec(query, args...)
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	lastInsertID, err = ret.LastInsertId()
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	return
@@ -169,7 +169,7 @@ func (m *mysqlClient_t) Insert(query string, args ...interface{}) (lastInsertID 
 func (m *mysqlClient_t) Query(query string, args ...interface{}) (results []*gsinf.MysqlResult, err error) {
 	if m.mysqlDB == nil {
 		err = fmt.Errorf("mysqlDB %s not init", m.Name)
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 	results = []*gsinf.MysqlResult{}
@@ -177,7 +177,7 @@ func (m *mysqlClient_t) Query(query string, args ...interface{}) (results []*gsi
 	//查询数据，取所有字段
 	rows, err = m.mysqlDB.Query(query, args...)
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 		return
 	}
 
@@ -224,7 +224,7 @@ func (m *mysqlClient_t) Query(query string, args ...interface{}) (results []*gsi
 	}
 
 	if err != nil {
-		logx.ErrorF("sql = %s, err = %v", query, err)
+		logger.Log().Error("sql = %s, err = %v", query, err)
 	}
 	return
 }

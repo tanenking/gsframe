@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/tanenking/gsframe/internal/helper"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -27,7 +27,7 @@ func GetProtoMessageTypeByName(protoFullName string) protoreflect.MessageType {
 	msgName := protoreflect.FullName(protoFullName)
 	msgType, err := protoregistry.GlobalTypes.FindMessageByName(msgName)
 	if err != nil {
-		logx.ErrorF("GetProtoMessageTypeByName err: %v", err)
+		logger.Log().Error("GetProtoMessageTypeByName err: %v", err)
 		return nil
 	}
 	return msgType
@@ -36,7 +36,7 @@ func NewProtoMessageByName(protoFullName string) (msg protoreflect.ProtoMessage,
 	msgType := GetProtoMessageTypeByName(protoFullName)
 	if msgType == nil {
 		err = fmt.Errorf("can't find message type")
-		logx.ErrorF("NewProtoMessageByName err: %v", err)
+		logger.Log().Error("NewProtoMessageByName err: %v", err)
 		return
 	}
 	msg = msgType.New().Interface()
@@ -49,12 +49,12 @@ func MakeProtoMessage(protoFullName string, data []byte) protoreflect.ProtoMessa
 		return nil
 	}
 	if msg == nil {
-		logx.ErrorF("msg = nil")
+		logger.Log().Error("msg = nil")
 		return nil
 	}
 	err = proto.Unmarshal(data, msg)
 	if err != nil {
-		logx.ErrorF("err = %v", err)
+		logger.Log().Error("err = %v", err)
 		return nil
 	}
 

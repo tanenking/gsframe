@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 type Claims struct {
@@ -39,7 +40,7 @@ func EncodeJWT(data string, secret_key string, expire_time time.Duration) string
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed_token, err := token.SignedString([]byte(secret_key))
 	if err != nil {
-		LogErrorF("Error signing token: %+v", err)
+		logger.Log().Error("Error signing token: %+v", err)
 		return ""
 	}
 	return signed_token

@@ -38,7 +38,7 @@ func init() {
 // 	}
 // 	result, err := filterManager.Filter().Filter(text)
 // 	if err != nil {
-// 		logx.ErrorF("FilterVerify err -> %v", err)
+// 		logger.Log().Error("FilterVerify err -> %v", err)
 // 		return false
 // 	}
 // 	return result == nil

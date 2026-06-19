@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/tanenking/gsframe/gsinf"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 // ConnManager 连接管理模块
@@ -29,7 +29,7 @@ func (connMgr *ConnManager) Add(conn gsinf.IConnection) {
 	connMgr.connections[conn.GetConnID()] = conn
 	connMgr.connLock.Unlock()
 
-	logx.DebugF("connection add to ConnManager successfully: conn num = %d", connMgr.Len())
+	logger.Log().Debug("connection add to ConnManager successfully: conn num = %d", connMgr.Len())
 }
 
 // Remove 删除连接
@@ -39,7 +39,7 @@ func (connMgr *ConnManager) Remove(conn gsinf.IConnection) {
 	//删除连接信息
 	delete(connMgr.connections, conn.GetConnID())
 	connMgr.connLock.Unlock()
-	logx.DebugF("connection Remove ConnID=%d, successfully: conn num = %d", conn.GetConnID(), connMgr.Len())
+	logger.Log().Debug("connection Remove ConnID=%d, successfully: conn num = %d", conn.GetConnID(), connMgr.Len())
 }
 
 // Get 利用ConnID获取链接
@@ -75,7 +75,7 @@ func (connMgr *ConnManager) ClearConn() {
 		delete(connMgr.connections, connID)
 	}
 	connMgr.connLock.Unlock()
-	logx.DebugF("Clear All Connections successfully: conn num = %d", connMgr.Len())
+	logger.Log().Debug("Clear All Connections successfully: conn num = %d", connMgr.Len())
 }
 
 // ClearOneConn  利用ConnID获取一个链接 并且删除
@@ -89,9 +89,9 @@ func (connMgr *ConnManager) ClearOneConn(connID uint32) {
 		conn.Stop()
 		//删除
 		delete(connections, connID)
-		logx.DebugF("Clear Connections ID: %d succeed", connID)
+		logger.Log().Debug("Clear Connections ID: %d succeed", connID)
 		return
 	}
 
-	logx.DebugF("Clear Connections ID:  %d err", connID)
+	logger.Log().Debug("Clear Connections ID:  %d err", connID)
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/helper"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/timex"
 	"github.com/tanenking/gsframe/internal/util_http"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -29,8 +29,8 @@ func StartHttpService(listen_port uint16, route_register func(g *gin.Engine)) {
 	if !constants.IsDebug() {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	gin.DefaultWriter = logx.GetLoggerWriter()
-	gin.DefaultErrorWriter = logx.GetLoggerWriter()
+	gin.DefaultWriter = logger.GetLoggerWriter()
+	gin.DefaultErrorWriter = logger.GetLoggerWriter()
 
 	g := gin.Default()
 
@@ -71,7 +71,7 @@ func (s _service_http_t) verificationSystemStatus() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		system_status := constants.GetSystemStatus()
 		if system_status != gsinf.SystemStatus_Normal {
-			logx.ErrorF("system_status is not normal")
+			logger.Log().Error("system_status is not normal")
 			resp := gin.H{"error_code": "-99999", "msg": "System Maintain ", "time_unix": timex.GetNowTimestamp()}
 			c.JSON(http.StatusOK, resp)
 			c.Abort()
@@ -153,7 +153,7 @@ func (s _service_http_t) process() gin.HandlerFunc {
 		requestID, _ := c.Get(`RequestID`)
 
 		if statusCode != http.StatusOK {
-			logx.ErrorF("%s %s from %s status[%s], [%v], requestID = %+v, headers = %s, request = %s, response = %s",
+			logger.Log().Error("%s %s from %s status[%s], [%v], requestID = %+v, headers = %s, request = %s, response = %s",
 				reqMethod,
 				reqUri,
 				clientIP,

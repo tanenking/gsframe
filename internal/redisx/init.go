@@ -6,7 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/tanenking/gsframe/gsinf"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 type redis_t struct {
@@ -55,11 +55,11 @@ func InitRedisHelper(configs *gsinf.RedisClusterConfig) error {
 
 	for _, v := range configs.Redis {
 		if len(v.Host) <= 0 {
-			logx.WarnF("redis config , host is nil")
+			logger.Log().Warn("redis config , host is nil")
 			continue
 		}
 		if v.Port <= 0 {
-			logx.WarnF("redis config , port is 0")
+			logger.Log().Warn("redis config , port is 0")
 			continue
 		}
 		addr := fmt.Sprintf("%s:%d", v.Host, v.Port)
@@ -76,7 +76,7 @@ func InitRedisHelper(configs *gsinf.RedisClusterConfig) error {
 		Redis.rdb_cluster = nil
 		err = initRedisSingleton(Addrs[0], configs.UserName, configs.Password)
 		if err != nil {
-			logx.ErrorF("%v", err)
+			logger.Log().Error("%v", err)
 			return err
 		}
 		Redis.rdb_client.AddHook(hook)
@@ -86,7 +86,7 @@ func InitRedisHelper(configs *gsinf.RedisClusterConfig) error {
 		Redis.Cmdable = Redis.rdb_cluster
 	}
 
-	logx.InfoF("InitRedisHelper success")
+	logger.Log().Info("InitRedisHelper success")
 
 	return nil
 }

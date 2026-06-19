@@ -12,7 +12,7 @@ import (
 
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/tcp/zcommon"
 
 	"github.com/gorilla/websocket"
@@ -123,8 +123,8 @@ func (c *Connection) GetGroupList() []string {
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *Connection) StartWriter() {
 	defer constants.AutoRecover()()
-	logx.DebugF("[Writer Goroutine is running]")
-	defer logx.DebugF("%s [conn Writer exit!]", c.ClientIP())
+	logger.Log().Debug("[Writer Goroutine is running]")
+	defer logger.Log().Debug("%s [conn Writer exit!]", c.ClientIP())
 	defer c.Stop()
 
 	//20秒检测一次,180秒视为连接关闭,20秒无player属性视为非法
@@ -141,21 +141,21 @@ func (c *Connection) StartWriter() {
 		case <-_keeptimer.C:
 			c.keepalive++
 			if c.keepalive >= 9 {
-				logx.ErrorF("tcp心跳超时")
+				logger.Log().Error("tcp心跳超时")
 				return
 			} else if !c.IsValid() {
-				logx.ErrorF("tcp连接20秒内都没有绑定player")
+				logger.Log().Error("tcp连接20秒内都没有绑定player")
 				return
 			}
 			_keeptimer.Reset(interval_impl)
 			deadline := time.Now().Add(zcommon.GlobalObject.WriteTimeout)
 			if err := c.Conn.SetWriteDeadline(deadline); err != nil {
-				logx.ErrorF(`SetWriteDeadline error %+v`, err)
+				logger.Log().Error(`SetWriteDeadline error %+v`, err)
 				return
 			}
 			err := c.Conn.WriteMessage(websocket.PingMessage, nil)
 			if err != nil {
-				logx.ErrorF(`websocket.PingMessage error %+v`, err)
+				logger.Log().Error(`websocket.PingMessage error %+v`, err)
 				return
 			}
 		case data, ok := <-c.msgBuffChan:
@@ -166,16 +166,16 @@ func (c *Connection) StartWriter() {
 					}()
 					msg, err := zcommon.Pack(data)
 					if err != nil {
-						logx.ErrorF(`消息打包错误 %+v`, err)
+						logger.Log().Error(`消息打包错误 %+v`, err)
 						return
 					}
 					err = c.WriteMessage(msg)
 					if err != nil {
-						logx.ErrorF(`WriteMessage error %+v`, err)
+						logger.Log().Error(`WriteMessage error %+v`, err)
 						return
 					}
 				} else {
-					logx.DebugF("msgBuffChan is Closed")
+					logger.Log().Debug("msgBuffChan is Closed")
 					return
 				}
 				return true
@@ -203,8 +203,8 @@ func (c *Connection) StartWriter() {
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *Connection) StartReader() {
 	defer constants.AutoRecover()()
-	logx.DebugF("[Reader Goroutine is running]")
-	defer logx.DebugF("%s [conn Reader exit!]", c.ClientIP())
+	logger.Log().Debug("[Reader Goroutine is running]")
+	defer logger.Log().Debug("%s [conn Reader exit!]", c.ClientIP())
 	defer c.Stop()
 
 	// 创建拆包解包的对象
@@ -222,20 +222,20 @@ func (c *Connection) StartReader() {
 				// t, b, err := c.Conn.ReadMessage()
 				t, err := zcommon.ReadWSMessage(c.Conn, wsmsg)
 				if err != nil {
-					logx.ErrorF("ReadWSMessage %v", err)
+					logger.Log().Error("ReadWSMessage %v", err)
 					return
 				}
 				c.keepalive = 0
 				c.Conn.SetReadDeadline(time.Now().Add(zcommon.GlobalObject.ReadTimeout))
 				switch t {
 				case websocket.TextMessage:
-					logx.DebugF("TextMessage -> %s", string(wsmsg.Data))
+					logger.Log().Debug("TextMessage -> %s", string(wsmsg.Data))
 				case websocket.PingMessage:
-					logx.DebugF("PingMessage -> %s", string(wsmsg.Data))
+					logger.Log().Debug("PingMessage -> %s", string(wsmsg.Data))
 				case websocket.PongMessage:
-					// logx.DebugF("PongMessage -> %s", string(wsmsg.Data))
+					// logger.Log().Debug("PongMessage -> %s", string(wsmsg.Data))
 				case websocket.CloseMessage:
-					logx.DebugF("CloseMessage -> %s", string(wsmsg.Data))
+					logger.Log().Debug("CloseMessage -> %s", string(wsmsg.Data))
 					return
 				case websocket.BinaryMessage:
 					msg := zcommon.MessagePoop.Get().(*zcommon.Message)
@@ -244,7 +244,7 @@ func (c *Connection) StartReader() {
 					}()
 					err := zcommon.UnpackFromBytes(wsmsg.Data, wsmsg.DataLen, msg)
 					if err != nil {
-						logx.ErrorF("UnpackFromBytes %v", err)
+						logger.Log().Error("UnpackFromBytes %v", err)
 						return
 					}
 					req := zcommon.RequestPool.Get().(*zcommon.Request)
@@ -256,7 +256,7 @@ func (c *Connection) StartReader() {
 					req.Msg = msg
 					c.MsgHandler.DoMsgHandler(req)
 				default:
-					logx.ErrorF("非法消息类型 -> %d", t)
+					logger.Log().Error("非法消息类型 -> %d", t)
 					return
 				}
 				return true
@@ -271,7 +271,7 @@ func (c *Connection) StartReader() {
 
 func (c *Connection) sendRest() {
 	defer constants.AutoRecover()()
-	defer logx.DebugF("%s [sendRest!]", c.ClientIP())
+	defer logger.Log().Debug("%s [sendRest!]", c.ClientIP())
 	for {
 		select {
 		case data, ok := <-c.msgBuffChan:
@@ -284,12 +284,12 @@ func (c *Connection) sendRest() {
 				}()
 				msg, err := zcommon.Pack(data)
 				if err != nil {
-					logx.ErrorF(`消息打包错误 %+v`, err)
+					logger.Log().Error(`消息打包错误 %+v`, err)
 					return
 				}
 				err = c.WriteMessage(msg)
 				if err != nil {
-					logx.ErrorF(`WriteMessage error %+v`, err)
+					logger.Log().Error(`WriteMessage error %+v`, err)
 					return
 				}
 				return true
@@ -446,7 +446,7 @@ func (c *Connection) finalizer() {
 		return
 	}
 
-	logx.DebugF("Conn Stop()...ConnID = %d", c.ConnID)
+	logger.Log().Debug("Conn Stop()...ConnID = %d", c.ConnID)
 
 	// 关闭socket链接
 	_ = c.Conn.Close()

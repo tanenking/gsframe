@@ -1,55 +1,47 @@
 package logx
 
-import (
-	"bytes"
-	"fmt"
+// const (
+// 	red    = 4
+// 	yellow = 6
+// 	blue   = 1
+// 	gray   = 8
+// 	green  = 2
+// )
 
-	"github.com/sirupsen/logrus"
-	"github.com/tanenking/gsframe/internal/timex"
-)
+// type formatter struct {
+// }
 
-const (
-	red    = 4
-	yellow = 6
-	blue   = 1
-	gray   = 8
-	green  = 2
-)
+// func (m *formatter) Format(entry *logrus.Entry) ([]byte, error) {
+// 	var b *bytes.Buffer
+// 	if entry.Buffer != nil {
+// 		b = entry.Buffer
+// 	} else {
+// 		b = &bytes.Buffer{}
+// 	}
 
-type formatter struct {
-}
+// 	// timeformat := entry.Time.Format(gsinf.TimeFormatString)
+// 	timeformat := timex.GetNowTime().Format(`2006-01-02 15:04:05.000`)
 
-func (m *formatter) Format(entry *logrus.Entry) ([]byte, error) {
-	var b *bytes.Buffer
-	if entry.Buffer != nil {
-		b = entry.Buffer
-	} else {
-		b = &bytes.Buffer{}
-	}
+// 	_runtime := ""
+// 	_pid := pid
 
-	// timeformat := entry.Time.Format(gsinf.TimeFormatString)
-	timeformat := timex.GetNowTime().Format(`2006-01-02 15:04:05.000`)
+// 	if entry.Context != nil {
+// 		//_pid = entry.Context.Value("pid").(int)
+// 		_runtime = entry.Context.Value(RunTime).(string)
+// 		if len(_runtime) <= 0 {
+// 			_runtime = "unknow"
+// 		}
+// 	}
 
-	_runtime := ""
-	_pid := pid
+// 	newLog := fmt.Sprintf("[%s] [%s][%d] [%s] [pid:%d] %s\n",
+// 		entry.Level,
+// 		timeformat,
+// 		entry.Time.UnixMilli(),
+// 		_runtime,
+// 		_pid,
+// 		entry.Message)
 
-	if entry.Context != nil {
-		//_pid = entry.Context.Value("pid").(int)
-		_runtime = entry.Context.Value(RunTime).(string)
-		if len(_runtime) <= 0 {
-			_runtime = "unknow"
-		}
-	}
+// 	b.WriteString(newLog)
 
-	newLog := fmt.Sprintf("[%s] [%s][%d] [%s] [pid:%d] %s\n",
-		entry.Level,
-		timeformat,
-		entry.Time.UnixMilli(),
-		_runtime,
-		_pid,
-		entry.Message)
-
-	b.WriteString(newLog)
-
-	return b.Bytes(), nil
-}
+// 	return b.Bytes(), nil
+// }

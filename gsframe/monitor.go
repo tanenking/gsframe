@@ -10,6 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
+	"github.com/tanenking/gsframe/internal/logger"
 )
 
 type CpuMemInfo_t struct {
@@ -57,12 +58,12 @@ func init() {
 	pid := int32(os.Getpid())
 	monitor.p, err = process.NewProcess(pid)
 	if err != nil {
-		LogErrorF("创建进程实例失败: %v", err)
+		logger.Log().Error("创建进程实例失败: %v", err)
 		return
 	}
 	monitor.prevCPU, err = monitor.p.Times()
 	if err != nil {
-		LogErrorF("获取初始CPU耗时失败: %v", err)
+		logger.Log().Error("获取初始CPU耗时失败: %v", err)
 		return
 	}
 	monitor.prevTime = time.Now()
@@ -93,7 +94,7 @@ func (r *monitor_t) calcCpuMemInfo() {
 	var err error
 	currCPU, err := r.p.Times()
 	if err != nil {
-		LogErrorF("获取CPU耗时失败: %v", err)
+		logger.Log().Error("获取CPU耗时失败: %v", err)
 		return
 	}
 
@@ -103,7 +104,7 @@ func (r *monitor_t) calcCpuMemInfo() {
 
 	memInfo, err := r.p.MemoryInfo()
 	if err != nil {
-		LogErrorF("获取内存信息失败: %v", err)
+		logger.Log().Error("获取内存信息失败: %v", err)
 		return
 	}
 	cpuMemInfo.MemRSS = memInfo.RSS

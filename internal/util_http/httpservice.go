@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/logx"
+	"github.com/tanenking/gsframe/internal/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -36,11 +36,11 @@ func StartHttpService(g *gin.Engine, listen_port uint16) {
 
 	constants.Go(func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logx.ErrorF("%v", err)
+			logger.Log().Error("%v", err)
 		}
 	})
 
-	logx.InfoF("HTTP SERVER [ %s ] RUNNING", constants.ServiceType)
+	logger.Log().Info("HTTP SERVER [ %s ] RUNNING", constants.ServiceType)
 
 	update()
 }
