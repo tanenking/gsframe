@@ -22,6 +22,10 @@ type TcpInitOption struct {
 	OnConnStop  func(conn gsinf.IConnection)
 }
 
+func GetTcpGlobalConfig() *gsinf.TcpGlobalConfig_t {
+	return zcommon.GlobalObject
+}
+
 func StartTcpServer(opt TcpInitOption) gsinf.IServer {
 	if opt.TCPPort <= 0 || opt.TCPPort >= 65535 {
 		return nil
