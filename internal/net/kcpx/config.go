@@ -1,4 +1,4 @@
-package ws
+package kcpx
 
 import (
 	"encoding/binary"
@@ -10,27 +10,25 @@ import (
 /*
 定义一个全局的对象
 */
-var config *gsinf.WebSocketServerConfig
+var config *gsinf.KcpServerConfig
 
 /*
 提供init方法，默认加载
 */
 func init() {
 	//初始化GlobalObject变量，设置一些默认值
-	config = &gsinf.WebSocketServerConfig{
+	config = &gsinf.KcpServerConfig{
 		Port:                   0,
 		MaxConn:                5000,
 		GoReadWriteBufferSize:  4096,
 		TcpReadWriteBufferSize: 256 * 1024, //256k
-		MaxPacketSize:          65536,
-		WriteMessageBufferLen:  128,
+		MaxPacketSize:          4096,
+		WriteMessageBufferLen:  4096,
 		ReadTimeout:            time.Minute,
 		WriteTimeout:           time.Second * 10,
 		HeartTimeoutSec:        120,
 		NoDelay:                true,
-		LimiterLimit:           0, //rate.Every(time.Millisecond * 100),
-		LimiterTimeout:         time.Second,
-		LimiterBucketCount:     10,
+		StreamMode:             false,
 		ByteOrder:              binary.LittleEndian,
 	}
 }
@@ -55,7 +53,7 @@ func validateConfig() {
 		config.MaxPacketSize = 65535
 	}
 	if config.WriteMessageBufferLen <= 0 {
-		config.WriteMessageBufferLen = 128
+		config.WriteMessageBufferLen = 4096
 	}
 	if config.ReadTimeout <= 0 {
 		config.ReadTimeout = time.Minute
@@ -68,5 +66,36 @@ func validateConfig() {
 	}
 	if config.ByteOrder == nil {
 		config.ByteOrder = binary.LittleEndian
+	}
+}
+
+func validateClientConfig(opt *gsinf.KcpClientConfig) {
+	if opt.PoolSize <= 0 {
+		opt.PoolSize = 30
+	}
+	if opt.GoReadWriteBufferSize <= 0 {
+		opt.GoReadWriteBufferSize = 4096
+	} else if opt.GoReadWriteBufferSize > 65535 {
+		opt.GoReadWriteBufferSize = 65535
+	}
+	if opt.TcpReadWriteBufferSize <= 0 {
+		opt.TcpReadWriteBufferSize = 256 * 1024
+	}
+	if opt.MaxPacketSize <= 0 {
+		opt.MaxPacketSize = 4096
+	} else if opt.MaxPacketSize > 65535 {
+		opt.MaxPacketSize = 65535
+	}
+	if opt.WriteMessageBufferLen <= 0 {
+		opt.WriteMessageBufferLen = 4096
+	}
+	if opt.ReadTimeout <= 0 {
+		opt.ReadTimeout = time.Minute
+	}
+	if opt.WriteTimeout <= 0 {
+		opt.WriteTimeout = time.Second * 10
+	}
+	if opt.ByteOrder == nil {
+		opt.ByteOrder = binary.LittleEndian
 	}
 }

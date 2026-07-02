@@ -1,19 +1,17 @@
-package ws
+package kcpx
 
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/net/common"
+	"github.com/xtaci/kcp-go/v5"
 )
 
 type server struct {
@@ -29,7 +27,7 @@ type server struct {
 	groupMsgList [common.MaxGroupMsgCount]*common.GroupMessage
 }
 
-func CreateServer(_config *gsinf.WebSocketServerConfig) gsinf.IWebSocketServer {
+func CreateServer(_config *gsinf.KcpServerConfig) gsinf.IKcpServer {
 	config = _config
 	validateConfig()
 	_server := &server{
@@ -41,7 +39,7 @@ func CreateServer(_config *gsinf.WebSocketServerConfig) gsinf.IWebSocketServer {
 	return _server
 }
 
-func (r *server) GetConnection(connId int32) gsinf.IWebSocketConnection {
+func (r *server) GetConnection(connId int32) gsinf.IKcpConnection {
 	if connId <= 0 || connId > config.MaxConn {
 		return nil
 	}
@@ -73,35 +71,6 @@ func (r *server) SendGroup(groupName string, header int64, msgID string, data []
 	copy(gmsg.MsgData, data)
 
 	close(gmsg.C)
-}
-
-func (r *server) start() {
-	//开启一个go去做服务端Linster业务
-	constants.Go(func() {
-		defer constants.AutoRecover()()
-
-		g := gin.Default()
-		g.GET("/", r.handshake)
-
-		addr := fmt.Sprintf(":%d", config.Port)
-		listener, err := net.Listen("tcp", addr)
-		if err != nil {
-			panic(err)
-		}
-		defer listener.Close()
-
-		config.Port = listener.Addr().(*net.TCPAddr).Port
-
-		logger.Log().Info("[START] Server websocket server name: %s,listenner at Port %d is starting\n", constants.ServiceType, config.Port)
-
-		httpServer := &http.Server{
-			Handler: g,
-		}
-		err = httpServer.Serve(listener)
-		if err != nil && err != http.ErrServerClosed {
-			panic(err)
-		}
-	})
 }
 
 func (r *server) findNextFreeIndex() int32 {
@@ -141,55 +110,82 @@ func (r *server) freeConnection(conn *connection) {
 	}
 }
 
-func (r *server) handshake(c *gin.Context) {
-	if websocket.IsWebSocketUpgrade(c.Request) {
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, c.Writer.Header())
+func (r *server) start() {
+	constants.Go(func() {
+		defer constants.AutoRecover()()
+
+		addr := fmt.Sprintf(":%d", config.Port)
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
-			logger.Log().Error("upgrade err -> : %v", err)
-			return
-		}
-		if r.closed.Load() > 0 || constants.GetSystemStatus() == gsinf.SystemStatus_Maintain {
-			//正在关闭中,不接收新连接了
-			conn.Close()
-			return
+			panic(err)
 		}
 
-		if config.IPBlackValidate != nil {
-			if config.IPBlackValidate(c.ClientIP()) {
-				logger.Log().Error("ip 黑名单 %s", c.ClientIP())
-				conn.Close()
-				return
+		listener, err := net.ListenUDP("udp", udpAddr)
+		if err != nil {
+			panic(err)
+		}
+		defer listener.Close()
+
+		config.Port = listener.LocalAddr().(*net.UDPAddr).Port
+
+		logger.Log().Info("[START] Server kcp server name: %s,listenner at Port %d is starting\n", constants.ServiceType, config.Port)
+
+		kcplistener, err := kcp.ServeConn(nil, 0, 0, listener)
+		if err != nil {
+			panic(err)
+		}
+		defer kcplistener.Close()
+
+		for {
+			conn, err := kcplistener.AcceptKCP()
+			if err != nil {
+				logger.Log().Error("kcp accept err: %s", err.Error())
+				continue
 			}
+			r.accept(conn)
 		}
-
-		r.Lock()
-		defer r.Unlock()
-
-		if r.ccount >= config.MaxConn {
-			logger.Log().Error("ws当前连接数量超过最大值,放弃新连接")
-			conn.Close()
-			return
-		}
-
-		var index = r.findNextFreeIndex()
-		if index < 0 {
-			logger.Log().Error("ws当前连接数量超过最大值,放弃新连接")
-			conn.Close()
-			return
-		}
-
-		var dealConn = r.getFreeConnection()
-		if dealConn == nil {
-			logger.Log().Error("ws新建connection失败")
-			conn.Close()
-			return
-		}
-		r.connections[index] = dealConn
-
-		dealConn.init(r, conn, index+1)
-
-		constants.Go(func() { dealConn.start() })
-	} else {
-		logger.Log().Error("不是websocket请求")
+	})
+}
+func (r *server) accept(conn *kcp.UDPSession) {
+	if r.closed.Load() > 0 || constants.GetSystemStatus() == gsinf.SystemStatus_Maintain {
+		//正在关闭中,不接收新连接了
+		conn.Close()
+		return
 	}
+	remoteAddress := conn.RemoteAddr().(*net.UDPAddr)
+	if config.IPBlackValidate != nil {
+		if config.IPBlackValidate(remoteAddress.IP.String()) {
+			logger.Log().Error("ip 黑名单 %s", remoteAddress.IP.String())
+			conn.Close()
+			return
+		}
+	}
+
+	r.Lock()
+	defer r.Unlock()
+
+	if r.ccount >= config.MaxConn {
+		logger.Log().Error("kcp当前连接数量超过最大值,放弃新连接")
+		conn.Close()
+		return
+	}
+
+	var index = r.findNextFreeIndex()
+	if index < 0 {
+		logger.Log().Error("kcp当前连接数量超过最大值,放弃新连接")
+		conn.Close()
+		return
+	}
+
+	var dealConn = r.getFreeConnection()
+	if dealConn == nil {
+		logger.Log().Error("kcp新建connection失败")
+		conn.Close()
+		return
+	}
+	r.connections[index] = dealConn
+
+	dealConn.init(r, conn, index+1)
+
+	constants.Go(func() { dealConn.start() })
 }

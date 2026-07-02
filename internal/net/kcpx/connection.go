@@ -1,31 +1,27 @@
-package ws
+package kcpx
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/net/common"
-	"golang.org/x/time/rate"
+	"github.com/xtaci/kcp-go/v5"
 )
 
 type connection struct {
 	_server       *server
 	ctx           context.Context
 	cancel        context.CancelFunc
-	conn          *websocket.Conn
+	conn          *kcp.UDPSession
 	connId        int32
 	clientIp      string
 	property      sync.Map
-	limiter       *rate.Limiter
 	closed        int32
 	lastHeartTime int64
 
@@ -38,7 +34,8 @@ type connection struct {
 func newConnection() *connection {
 	return &connection{}
 }
-func (c *connection) init(_server *server, conn *websocket.Conn, connId int32) bool {
+
+func (c *connection) init(_server *server, conn *kcp.UDPSession, connId int32) bool {
 	c._server = _server
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
@@ -54,32 +51,18 @@ func (c *connection) init(_server *server, conn *websocket.Conn, connId int32) b
 	c.groupMsgSeq = c._server.groupMsgSeq
 	c.groupMap = sync.Map{}
 
-	if config.LimiterLimit > 0 {
-		c.limiter = rate.NewLimiter(config.LimiterLimit, int(config.LimiterBucketCount))
-	}
-
 	_ = conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
 	_ = conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
 
-	// 设置Pong回调 (刷新读超时，保持空闲连接存活)
-	conn.SetPongHandler(func(string) error {
-		_ = conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
-		return nil
-	})
+	conn.SetRateLimit(0)
+	conn.SetStreamMode(config.StreamMode)
+	conn.SetNoDelay(1, 10, 2, 1)
+	conn.SetACKNoDelay(config.NoDelay)
+	conn.SetWindowSize(1024, 1024)
+	conn.SetMtu(1400)
 
-	tcpConn, ok := conn.UnderlyingConn().(*net.TCPConn)
-	if ok {
-		// 开启 NoDelay: 关闭Nagle, 小包立即发送
-		_ = tcpConn.SetNoDelay(config.NoDelay)
-
-		// 设置读写缓冲区
-		_ = tcpConn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
-		_ = tcpConn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
-
-		// 开启 TCP Keepalive
-		_ = tcpConn.SetKeepAlive(true)
-		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
-	}
+	conn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
+	conn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
 
 	return true
 }
@@ -123,14 +106,6 @@ func (c *connection) GetGroupList() []string {
 	})
 	return list
 }
-func (c *connection) WaitLimiterToken() error {
-	if c.limiter == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), config.LimiterTimeout)
-	defer cancel()
-	return c.limiter.Wait(ctx)
-}
 
 // SetProperty 设置链接属性
 func (c *connection) SetProperty(key string, value interface{}) {
@@ -158,7 +133,7 @@ func (c *connection) RemoveProperty(key string) {
 func (c *connection) Send(header int64, msgID string, data []byte) error {
 	defer constants.AutoRecover()()
 	if c.closed > 0 {
-		return fmt.Errorf("ws Connection %d closed when send buff msg", c.connId)
+		return fmt.Errorf("kcp Connection %d closed when send buff msg", c.connId)
 	}
 
 	var msg = common.CreateMessage(config.ByteOrder)
@@ -175,8 +150,6 @@ func (c *connection) Send(header int64, msgID string, data []byte) error {
 	return nil
 }
 
-// //////////////////////////////////////////////////////////////////////////////
-// Start 启动连接，让当前连接开始工作
 func (c *connection) start() {
 	if config.OnConnectionCreate != nil {
 		config.OnConnectionCreate(c)
@@ -199,46 +172,11 @@ func (c *connection) start() {
 	c.finalizer()
 }
 
-func (c *connection) readMessage(conn *websocket.Conn, bs []byte) (int, error) {
-	if conn == nil {
-		return 0, errors.New(`readMessage conn is nil`)
-	}
-	bs = bs[:0]
-	msgType, reader, err := conn.NextReader()
-	if err != nil {
-		return 0, err
-	}
-
-	for {
-		if len(bs) >= cap(bs)-1024 {
-			newBuf := make([]byte, len(bs), cap(bs)*2)
-			copy(newBuf, bs)
-			bs = newBuf
-		}
-
-		n, err := reader.Read(bs[len(bs):cap(bs)])
-		// if n > 0 {
-		// 	bs = bs[:len(bs)+n]
-		// }
-		if n <= 0 {
-
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return msgType, nil
-}
-
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *connection) startReader() {
 	defer constants.AutoRecover()()
-	logger.Log().Debug("ws [Reader Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("[ws conn Reader exit!] id = %d", c.connId)
+	logger.Log().Debug("kcp [Reader Goroutine is running] id = %d", c.connId)
+	defer logger.Log().Debug("[kcp conn Reader exit!] id = %d", c.connId)
 	defer c.Stop()
 
 	for {
@@ -252,43 +190,28 @@ func (c *connection) startReader() {
 				defer func() {
 					common.DeleteByteBuffer(bs)
 				}()
-				t, err := c.readMessage(c.conn, bs)
+				c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
+				_, err := c.conn.Read(bs)
 				if err != nil {
-					logger.Log().Error("ws read error %v", err)
+					logger.Log().Error("kcp read error %v", err)
 					return
 				}
 				c.lastHeartTime = time.Now().Unix()
-				c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
-				switch t {
-				case websocket.TextMessage:
-					logger.Log().Debug("TextMessage -> %s", string(bs))
-				case websocket.PingMessage:
-					logger.Log().Debug("PingMessage -> %s", string(bs))
-				case websocket.PongMessage:
-					// logger.Log().Debug("PongMessage -> %s", string(bs))
-				case websocket.CloseMessage:
-					logger.Log().Debug("CloseMessage -> %s", string(bs))
+				msg := common.CreateMessage(config.ByteOrder)
+				defer func() {
+					common.DeleteMessage(msg)
+				}()
+				err = msg.FromBytes(bs)
+				if err != nil {
+					logger.Log().Error("kcp msg.FromBytes %v", err)
 					return
-				case websocket.BinaryMessage:
-					msg := common.CreateMessage(config.ByteOrder)
-					defer func() {
-						common.DeleteMessage(msg)
-					}()
-					err := msg.FromBytes(bs)
-					if err != nil {
-						logger.Log().Error("ws msg.FromBytes %v", err)
-						return
+				}
+				if config.MessageCallback != nil {
+					if !config.MessageCallback.PreHandle(c, msg) {
+						return true
 					}
-					if config.MessageCallback != nil {
-						if !config.MessageCallback.PreHandle(c, msg) {
-							return true
-						}
-						config.MessageCallback.Handle(c, msg)
-						config.MessageCallback.PostHandle(c, msg)
-					}
-				default:
-					logger.Log().Error("非法消息类型 -> %d", t)
-					return
+					config.MessageCallback.Handle(c, msg)
+					config.MessageCallback.PostHandle(c, msg)
 				}
 				return true
 			}()
@@ -299,31 +222,11 @@ func (c *connection) startReader() {
 	}
 }
 
-func (c *connection) writeMessage(data []byte) error {
-	deadline := time.Now().Add(config.WriteTimeout)
-	c.conn.SetWriteDeadline(deadline)
-	err := c.conn.WriteMessage(websocket.BinaryMessage, data)
-	if err == nil {
-		return err
-	}
-
-	if websocket.IsCloseError(err) || websocket.IsUnexpectedCloseError(err) {
-		return errors.New("websocket connection closed: " + err.Error())
-	}
-	// 超时错误，可短暂重试一次（可选）
-	if errors.Is(err, context.DeadlineExceeded) {
-		// 重试一次
-		time.Sleep(100 * time.Millisecond)
-		return c.conn.WriteMessage(websocket.BinaryMessage, data)
-	}
-	return nil
-}
-
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *connection) startWriter() {
 	defer constants.AutoRecover()()
-	logger.Log().Debug("ws [Writer Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("ws [conn Writer exit!] id = %d", c.connId)
+	logger.Log().Debug("kcp [Writer Goroutine is running] id = %d", c.connId)
+	defer logger.Log().Debug("kcp [conn Writer exit!] id = %d", c.connId)
 	defer c.Stop()
 
 	//20秒检测一次,180秒视为连接关闭
@@ -337,16 +240,10 @@ func (c *connection) startWriter() {
 			return
 		case <-_keeptimer.C:
 			if time.Now().Unix()-c.lastHeartTime >= config.HeartTimeoutSec {
-				logger.Log().Error("websocket 心跳超时")
+				logger.Log().Error("udp 心跳超时")
 				return
 			}
 			_keeptimer.Reset(interval_impl)
-			c.conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
-			err := c.conn.WriteMessage(websocket.PingMessage, nil)
-			if err != nil {
-				logger.Log().Error(`websocket.PingMessage error %+v`, err)
-				return
-			}
 		case msg, ok := <-c.writeBufferList:
 			ret := func() (ret bool) {
 				if ok {
@@ -361,9 +258,11 @@ func (c *connection) startWriter() {
 						logger.Log().Error(`消息打包错误 %+v`, err)
 						return
 					}
-					var err = c.writeMessage(bs)
+					deadline := time.Now().Add(config.WriteTimeout)
+					c.conn.SetWriteDeadline(deadline)
+					_, err := c.conn.Write(bs)
 					if err != nil {
-						logger.Log().Error(`ws write error %+v`, err)
+						logger.Log().Error(`kcp Write error %+v`, err)
 						return
 					}
 				} else {
@@ -392,7 +291,7 @@ func (c *connection) startWriter() {
 
 func (c *connection) sendRest() {
 	defer constants.AutoRecover()()
-	defer logger.Log().Debug("ws [sendRest!] id = %d", c.connId)
+	defer logger.Log().Debug("kcp [sendRest!] id = %d", c.connId)
 	for {
 		select {
 		case msg, ok := <-c.writeBufferList:
@@ -409,9 +308,9 @@ func (c *connection) sendRest() {
 						logger.Log().Error(`消息打包错误 %+v`, err)
 						return
 					}
-					var err = c.writeMessage(bs)
+					_, err := c.conn.Write(bs)
 					if err != nil {
-						logger.Log().Error(`ws Write error %+v`, err)
+						logger.Log().Error(`kcp Write error %+v`, err)
 						return
 					}
 				} else {
@@ -438,7 +337,7 @@ func (c *connection) finalizer() {
 		return
 	}
 
-	logger.Log().Debug("ws Conn Stop()...ConnID = %d", c.connId)
+	logger.Log().Debug("kcp Conn Stop()...ConnID = %d", c.connId)
 
 	// 关闭socket链接
 	_ = c.conn.Close()
