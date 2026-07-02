@@ -1,61 +1,52 @@
 package gsframe
 
-import (
-	"github.com/tanenking/gsframe/gsinf"
-	"github.com/tanenking/gsframe/internal/constants"
-	"github.com/tanenking/gsframe/internal/tcp/zcommon"
-	"github.com/tanenking/gsframe/internal/tcp/znet"
-	"github.com/tanenking/gsframe/internal/tcp/zws"
-	"github.com/tanenking/gsframe/internal/tcp/zwspb"
-)
+// type TcpInitOption struct {
+// 	TCPPort        int
+// 	MaxConn        int
+// 	MaxPacketSize  int
+// 	IsWebSocket    bool
+// 	DirectProtoMsg bool
 
-type TcpInitOption struct {
-	TCPPort        int
-	MaxConn        int
-	MaxPacketSize  int
-	IsWebSocket    bool
-	DirectProtoMsg bool
+// 	OnServerPreStart func(server gsinf.IServer)
 
-	OnServerPreStart func(server gsinf.IServer)
+// 	OnConnStart func(conn gsinf.IConnection)
+// 	OnConnStop  func(conn gsinf.IConnection)
+// }
 
-	OnConnStart func(conn gsinf.IConnection)
-	OnConnStop  func(conn gsinf.IConnection)
-}
+// func GetTcpGlobalConfig() *gsinf.TcpGlobalConfig_t {
+// 	return zcommon.GlobalObject
+// }
 
-func GetTcpGlobalConfig() *gsinf.TcpGlobalConfig_t {
-	return zcommon.GlobalObject
-}
+// func StartTcpServer(opt TcpInitOption) gsinf.IServer {
+// 	if opt.TCPPort <= 0 || opt.TCPPort >= 65535 {
+// 		return nil
+// 	}
+// 	zcommon.GlobalObject.TCPPort = opt.TCPPort
+// 	zcommon.GlobalObject.MaxConn = opt.MaxConn
+// 	zcommon.GlobalObject.MaxPacketSize = uint32(opt.MaxPacketSize)
+// 	zcommon.GlobalObject.DirectProtoMsg = opt.DirectProtoMsg
 
-func StartTcpServer(opt TcpInitOption) gsinf.IServer {
-	if opt.TCPPort <= 0 || opt.TCPPort >= 65535 {
-		return nil
-	}
-	zcommon.GlobalObject.TCPPort = opt.TCPPort
-	zcommon.GlobalObject.MaxConn = opt.MaxConn
-	zcommon.GlobalObject.MaxPacketSize = uint32(opt.MaxPacketSize)
-	zcommon.GlobalObject.DirectProtoMsg = opt.DirectProtoMsg
+// 	var server gsinf.IServer
+// 	if opt.IsWebSocket {
+// 		if opt.DirectProtoMsg {
+// 			server = zwspb.NewServer()
+// 		} else {
+// 			server = zws.NewServer()
+// 		}
+// 	} else {
+// 		server = znet.NewServer()
+// 	}
+// 	if opt.OnServerPreStart != nil {
+// 		opt.OnServerPreStart(server)
+// 	}
+// 	server.SetOnConnStart(opt.OnConnStart)
+// 	server.SetOnConnStop(opt.OnConnStop)
 
-	var server gsinf.IServer
-	if opt.IsWebSocket {
-		if opt.DirectProtoMsg {
-			server = zwspb.NewServer()
-		} else {
-			server = zws.NewServer()
-		}
-	} else {
-		server = znet.NewServer()
-	}
-	if opt.OnServerPreStart != nil {
-		opt.OnServerPreStart(server)
-	}
-	server.SetOnConnStart(opt.OnConnStart)
-	server.SetOnConnStop(opt.OnConnStop)
+// 	constants.Go(func() { server.Serve() })
 
-	constants.Go(func() { server.Serve() })
+// 	return server
+// }
 
-	return server
-}
-
-func SendGroupMsg(groupName string, msgID string, data []byte) {
-	zcommon.SendGroupMsg(groupName, msgID, data)
-}
+// func SendGroupMsg(groupName string, msgID string, data []byte) {
+// 	zcommon.SendGroupMsg(groupName, msgID, data)
+// }
