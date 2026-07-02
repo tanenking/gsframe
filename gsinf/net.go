@@ -18,6 +18,7 @@ type IMessage interface {
 type IWebSocketServer interface {
 	GetConnection(connId int32) IWebSocketConnection
 	GetConnectionCount() int32
+	SendGroup(groupName string, header int64, msgID string, data []byte)
 }
 
 type IWebSocketConnection interface {

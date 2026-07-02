@@ -13,6 +13,7 @@ import (
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/logger"
+	"github.com/tanenking/gsframe/internal/net/common"
 )
 
 type server struct {
@@ -22,6 +23,10 @@ type server struct {
 	cindex         int32
 	ccount         int32
 	connectionPool chan *connection
+
+	groupMsgSeq  uint16
+	groupMsgSync sync.Mutex
+	groupMsgList [common.MaxGroupMsgCount]*common.GroupMessage
 }
 
 func CreateServer(_config *gsinf.WebSocketServerConfig) gsinf.IWebSocketServer {
@@ -29,6 +34,7 @@ func CreateServer(_config *gsinf.WebSocketServerConfig) gsinf.IWebSocketServer {
 	_server := &server{
 		connections:    make([]*connection, _config.MaxConn),
 		connectionPool: make(chan *connection, _config.MaxConn),
+		groupMsgList:   [common.MaxGroupMsgCount]*common.GroupMessage{},
 	}
 	_server.start()
 	return _server
@@ -44,6 +50,28 @@ func (r *server) GetConnection(connId int32) gsinf.IWebSocketConnection {
 
 func (r *server) GetConnectionCount() int32 {
 	return r.ccount
+}
+
+func (r *server) SendGroup(groupName string, header int64, msgID string, data []byte) {
+	r.groupMsgSync.Lock()
+	gmsg := r.groupMsgList[r.groupMsgSeq]
+	r.groupMsgSeq++
+	if r.groupMsgSeq >= common.MaxGroupMsgCount {
+		r.groupMsgSeq = 0
+	}
+	r.groupMsgList[r.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
+	r.groupMsgSync.Unlock()
+
+	gmsg.GroupName = groupName
+	gmsg.Header = header
+	gmsg.MsgID = msgID
+	if cap(gmsg.MsgData) < len(data) {
+		gmsg.MsgData = make([]byte, 0, len(data))
+	}
+	gmsg.MsgData = gmsg.MsgData[:len(data)]
+	copy(gmsg.MsgData, data)
+
+	close(gmsg.C)
 }
 
 func (r *server) start() {

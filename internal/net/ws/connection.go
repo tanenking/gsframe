@@ -38,24 +38,24 @@ type connection struct {
 func newConnection() *connection {
 	return &connection{}
 }
-func (r *connection) init(_server *server, conn *websocket.Conn, connId int32) bool {
-	r._server = _server
+func (c *connection) init(_server *server, conn *websocket.Conn, connId int32) bool {
+	c._server = _server
 
-	r.ctx, r.cancel = context.WithCancel(context.Background())
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	r.conn = conn
-	r.closed = 0
-	r.connId = connId
-	r.property = sync.Map{}
-	r.lastHeartTime = time.Now().Unix()
+	c.conn = conn
+	c.closed = 0
+	c.connId = connId
+	c.property = sync.Map{}
+	c.lastHeartTime = time.Now().Unix()
 
-	r.writeBufferList = make(chan *common.Message, config.WriteMessageBufferLen)
+	c.writeBufferList = make(chan *common.Message, config.WriteMessageBufferLen)
 
-	r.groupMsgSeq = common.GroupMsgSeq
-	r.groupMap = sync.Map{}
+	c.groupMsgSeq = c._server.groupMsgSeq
+	c.groupMap = sync.Map{}
 
 	if config.LimiterLimit > 0 {
-		r.limiter = rate.NewLimiter(config.LimiterLimit, int(config.LimiterBucketCount))
+		c.limiter = rate.NewLimiter(config.LimiterLimit, int(config.LimiterBucketCount))
 	}
 
 	_ = conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
@@ -333,7 +333,7 @@ func (c *connection) startWriter() {
 	var interval_impl = time.Second * 20
 	var _keeptimer = time.NewTimer(interval_impl)
 
-	gmsg := common.GroupMsgList[c.groupMsgSeq]
+	gmsg := c._server.groupMsgList[c.groupMsgSeq]
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -392,7 +392,7 @@ func (c *connection) startWriter() {
 			if c.groupMsgSeq >= common.MaxGroupMsgCount {
 				c.groupMsgSeq = 0
 			}
-			gmsg = common.GroupMsgList[c.groupMsgSeq]
+			gmsg = c._server.groupMsgList[c.groupMsgSeq]
 		}
 	}
 }
