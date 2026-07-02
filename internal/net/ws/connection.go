@@ -58,27 +58,27 @@ func (c *connection) init(_server *server, conn *websocket.Conn, connId int32) b
 		c.limiter = rate.NewLimiter(config.LimiterLimit, int(config.LimiterBucketCount))
 	}
 
-	_ = conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
-	_ = conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
+	conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
+	conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
 
 	// 设置Pong回调 (刷新读超时，保持空闲连接存活)
 	conn.SetPongHandler(func(string) error {
-		_ = conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
+		conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
 		return nil
 	})
 
 	tcpConn, ok := conn.UnderlyingConn().(*net.TCPConn)
 	if ok {
 		// 开启 NoDelay: 关闭Nagle, 小包立即发送
-		_ = tcpConn.SetNoDelay(config.NoDelay)
+		tcpConn.SetNoDelay(config.NoDelay)
 
 		// 设置读写缓冲区
-		_ = tcpConn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
-		_ = tcpConn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
+		tcpConn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
+		tcpConn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
 
 		// 开启 TCP Keepalive
-		_ = tcpConn.SetKeepAlive(true)
-		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(30 * time.Second)
 	}
 
 	return true
@@ -441,7 +441,7 @@ func (c *connection) finalizer() {
 	logger.Log().Debug("ws Conn Stop()...ConnID = %d", c.connId)
 
 	// 关闭socket链接
-	_ = c.conn.Close()
+	c.conn.Close()
 	c.conn = nil
 
 	//将链接从连接管理器中删除

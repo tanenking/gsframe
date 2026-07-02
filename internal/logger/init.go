@@ -76,16 +76,7 @@ func Init() {
 		logFilePath = filepath.Join(fullpath, filename)
 	}
 	consoleWriter = &zerolog.ConsoleWriter{
-		Out: os.Stdout,
-		// FormatLevel: func(i interface{}) string {
-		// 	if l, ok := i.(zerolog.Level); ok {
-		// 		return l.String()
-		// 	}
-		// 	if l, ok := i.(string); ok {
-		// 		return l
-		// 	}
-		// 	return "???"
-		// },
+		Out:          os.Stdout,
 		TimeFormat:   time.DateTime,
 		TimeLocation: gsinf.TimeZoneLocation,
 		PartsOrder: []string{

@@ -51,8 +51,8 @@ func (c *connection) init(_server *server, conn *kcp.UDPSession, connId int32) b
 	c.groupMsgSeq = c._server.groupMsgSeq
 	c.groupMap = sync.Map{}
 
-	_ = conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
-	_ = conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
+	conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
+	conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
 
 	conn.SetRateLimit(0)
 	conn.SetStreamMode(config.StreamMode)
@@ -340,7 +340,7 @@ func (c *connection) finalizer() {
 	logger.Log().Debug("kcp Conn Stop()...ConnID = %d", c.connId)
 
 	// 关闭socket链接
-	_ = c.conn.Close()
+	c.conn.Close()
 	c.conn = nil
 
 	//将链接从连接管理器中删除
