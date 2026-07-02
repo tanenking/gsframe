@@ -176,7 +176,7 @@ func (c *connection) start() {
 func (c *connection) startReader() {
 	defer constants.AutoRecover()()
 	logger.Log().Debug("kcp [Reader Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("[kcp conn Reader exit!] id = %d", c.connId)
+	defer logger.Log().Debug("kcp [Reader exit!] id = %d", c.connId)
 	defer c.Stop()
 
 	for {
@@ -226,7 +226,7 @@ func (c *connection) startReader() {
 func (c *connection) startWriter() {
 	defer constants.AutoRecover()()
 	logger.Log().Debug("kcp [Writer Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("kcp [conn Writer exit!] id = %d", c.connId)
+	defer logger.Log().Debug("kcp [Writer exit!] id = %d", c.connId)
 	defer c.Stop()
 
 	//20秒检测一次,180秒视为连接关闭
@@ -255,7 +255,7 @@ func (c *connection) startWriter() {
 						common.DeleteByteBuffer(bs)
 					}()
 					if err := msg.ToBytes(bs); err != nil {
-						logger.Log().Error(`消息打包错误 %+v`, err)
+						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
 						return
 					}
 					deadline := time.Now().Add(config.WriteTimeout)
@@ -305,7 +305,7 @@ func (c *connection) sendRest() {
 						common.DeleteByteBuffer(bs)
 					}()
 					if err := msg.ToBytes(bs); err != nil {
-						logger.Log().Error(`消息打包错误 %+v`, err)
+						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
 						return
 					}
 					_, err := c.conn.Write(bs)
@@ -328,13 +328,13 @@ func (c *connection) sendRest() {
 	}
 }
 func (c *connection) finalizer() {
-	if config.OnConnectionStop != nil {
-		config.OnConnectionStop(c)
-	}
-
 	//如果当前链接已经关闭
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return
+	}
+
+	if config.OnConnectionStop != nil {
+		config.OnConnectionStop(c)
 	}
 
 	logger.Log().Debug("kcp Conn Stop()...ConnID = %d", c.connId)

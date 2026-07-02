@@ -238,7 +238,7 @@ func (c *connection) readMessage(conn *websocket.Conn, bs []byte) (int, error) {
 func (c *connection) startReader() {
 	defer constants.AutoRecover()()
 	logger.Log().Debug("ws [Reader Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("[ws conn Reader exit!] id = %d", c.connId)
+	defer logger.Log().Debug("ws [Reader exit!] id = %d", c.connId)
 	defer c.Stop()
 
 	for {
@@ -323,7 +323,7 @@ func (c *connection) writeMessage(data []byte) error {
 func (c *connection) startWriter() {
 	defer constants.AutoRecover()()
 	logger.Log().Debug("ws [Writer Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("ws [conn Writer exit!] id = %d", c.connId)
+	defer logger.Log().Debug("ws [Writer exit!] id = %d", c.connId)
 	defer c.Stop()
 
 	//20秒检测一次,180秒视为连接关闭
@@ -429,13 +429,13 @@ func (c *connection) sendRest() {
 	}
 }
 func (c *connection) finalizer() {
-	if config.OnConnectionStop != nil {
-		config.OnConnectionStop(c)
-	}
-
 	//如果当前链接已经关闭
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return
+	}
+
+	if config.OnConnectionStop != nil {
+		config.OnConnectionStop(c)
 	}
 
 	logger.Log().Debug("ws Conn Stop()...ConnID = %d", c.connId)

@@ -79,6 +79,7 @@ func Init() {
 		Out:          os.Stdout,
 		TimeFormat:   time.DateTime,
 		TimeLocation: gsinf.TimeZoneLocation,
+		NoColor:      false,
 		PartsOrder: []string{
 			zerolog.CallerFieldName,
 			zerolog.TimestampFieldName,
@@ -92,10 +93,22 @@ func Init() {
 			MaxSize:    64,          //单个文件最大尺寸 (MB)
 			MaxBackups: 512,         //最多保留的旧文件数量
 			MaxAge:     28,          //旧文件最长保留天数
-			LocalTime:  true,
-			Compress:   false, //是否压缩旧文件为 .gz
+			// LocalTime:  true,
+			Compress: false, //是否压缩旧文件为 .gz
 		}
-		multiWriter = zerolog.MultiLevelWriter(&logFile, consoleWriter)
+		textWriter := zerolog.ConsoleWriter{
+			Out:          &logFile,
+			TimeFormat:   time.DateTime,
+			TimeLocation: gsinf.TimeZoneLocation,
+			NoColor:      true,
+			PartsOrder: []string{
+				zerolog.CallerFieldName,
+				zerolog.TimestampFieldName,
+				zerolog.LevelFieldName,
+				zerolog.MessageFieldName,
+			},
+		}
+		multiWriter = zerolog.MultiLevelWriter(textWriter, consoleWriter)
 	} else {
 		multiWriter = zerolog.MultiLevelWriter(consoleWriter)
 	}

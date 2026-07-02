@@ -28,10 +28,11 @@ type IKcpConnection interface {
 }
 
 type IKcpClient interface {
+	Send(header int64, msgID string, data []byte) error
 }
 
 type IKcpClientMessageCallback interface {
-	Handle(conn IKcpClient, msg IMessage) //处理conn业务的方法
+	Handle(msg IMessage) //处理conn业务的方法
 }
 
 type KcpClientConfig struct {
@@ -57,13 +58,11 @@ type KcpClientConfig struct {
 	StreamMode bool
 	//字节序
 	ByteOrder binary.ByteOrder
-	//连接创建后的回调
-	OnConnectionCreate func(conn IKcpClient)
-	//连接终止前的回调
-	OnConnectionStop func(conn IKcpClient)
 	//消息处理回调
 	MessageCallback IKcpClientMessageCallback
 }
+
+////////////////////////////////////////////////////////////////////////
 
 type IKcpConnectionMessageCallback interface {
 	PreHandle(conn IKcpConnection, msg IMessage) bool //在处理conn业务之前的钩子方法
