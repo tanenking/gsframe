@@ -96,6 +96,7 @@ func (msg *Message) ToBytes(outbs *ByteBuffer) error {
 			return err
 		}
 	}
+	outbs.Data = outbs.Data[0:totalLen]
 	return nil
 }
 func (msg *Message) FromBytes(inbs []byte) error {
@@ -119,6 +120,7 @@ func (msg *Message) FromBytes(inbs []byte) error {
 	if nameSize > 0 {
 		name := CreateByteBuffer(256)
 		defer DeleteByteBuffer(name)
+		name.Data = name.Data[:nameSize]
 		if err := binary.Read(dataBuff, msg.byteorder, name.Data); err != nil {
 			return err
 		}
@@ -133,6 +135,7 @@ func (msg *Message) FromBytes(inbs []byte) error {
 	}
 	msg.Data = msg.Data[:0]
 	if dataLen > 0 {
+		msg.Data = msg.Data[:dataLen]
 		//读data
 		if err := binary.Read(dataBuff, msg.byteorder, msg.Data); err != nil {
 			return err

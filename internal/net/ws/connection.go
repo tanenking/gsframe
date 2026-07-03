@@ -199,11 +199,11 @@ func (c *connection) start() {
 	c.finalizer()
 }
 
-func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (int, error) {
-	if conn == nil {
+func (c *connection) readMessage(bs *common.ByteBuffer) (int, error) {
+	if c.conn == nil {
 		return 0, errors.New(`readMessage conn is nil`)
 	}
-	msgType, reader, err := conn.NextReader()
+	msgType, reader, err := c.conn.NextReader()
 	if err != nil {
 		return 0, err
 	}
@@ -211,7 +211,7 @@ func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (i
 	var recvtotal = 0
 	var recv = make([]byte, cap(bs.Data))
 	for {
-		recv = recv[:0]
+		recv = recv[:cap(recv)]
 		var recvcount int
 		recvcount, err = reader.Read(recv)
 		if err != nil {
@@ -221,15 +221,14 @@ func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (i
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			return 0, err
-		}
+		recv = recv[:recvcount]
 		if cap(bs.Data) < (recvtotal + recvcount) {
 			//扩容
 			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
 			copy(newBuf, bs.Data)
 			bs.Data = newBuf
 		}
+		bs.Data = bs.Data[:(recvtotal + recvcount)]
 		copy(bs.Data[recvtotal:], recv)
 		recvtotal += recvcount
 
@@ -240,38 +239,6 @@ func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (i
 	}
 	return msgType, nil
 }
-
-// func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (int, error) {
-// 	if conn == nil {
-// 		return 0, errors.New(`readMessage conn is nil`)
-// 	}
-// 	bs.Data = bs.Data[:0]
-// 	msgType, reader, err := conn.NextReader()
-// 	if err != nil {
-// 		return 0, err
-// 	}
-
-// 	for {
-// 		if len(bs.Data) >= cap(bs.Data)-1024 {
-// 			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
-// 			copy(newBuf, bs.Data)
-// 			bs.Data = newBuf
-// 		}
-
-// 		n, err := reader.Read(bs.Data[len(bs.Data):cap(bs.Data)])
-// 		if n > 0 {
-// 			bs.Data = bs.Data[:len(bs.Data)+n]
-// 		}
-// 		if err == io.EOF {
-// 			break
-// 		}
-// 		if err != nil {
-// 			return 0, err
-// 		}
-// 	}
-
-// 	return msgType, nil
-// }
 
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *connection) startReader() {
@@ -291,7 +258,7 @@ func (c *connection) startReader() {
 				defer func() {
 					common.DeleteByteBuffer(bs)
 				}()
-				t, err := c.readMessage(c.conn, bs)
+				t, err := c.readMessage(bs)
 				if err != nil {
 					logger.Log().Error("ws read error %v", err)
 					return

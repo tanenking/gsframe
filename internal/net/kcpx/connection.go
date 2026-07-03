@@ -180,7 +180,7 @@ func (c *connection) readMessage(bs *common.ByteBuffer) (err error) {
 	var recvtotal = 0
 	var recv = make([]byte, cap(bs.Data))
 	for {
-		recv = recv[:0]
+		recv = recv[:cap(recv)]
 		var recvcount int
 		recvcount, err = c.conn.Read(recv)
 		if err != nil {
@@ -190,12 +190,14 @@ func (c *connection) readMessage(bs *common.ByteBuffer) (err error) {
 		if recvcount == 0 {
 			return
 		}
+		recv = recv[:recvcount]
 		if cap(bs.Data) < (recvtotal + recvcount) {
 			//扩容
 			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
 			copy(newBuf, bs.Data)
 			bs.Data = newBuf
 		}
+		bs.Data = bs.Data[:(recvtotal + recvcount)]
 		copy(bs.Data[recvtotal:], recv)
 		recvtotal += recvcount
 
