@@ -75,22 +75,37 @@ func Init() {
 		fullpath = filepath.Join(fullpath, constants.ServiceType)
 		logFilePath = filepath.Join(fullpath, filename)
 	}
+
+	formatCaller := func(i interface{}) string {
+		full := i.(string)
+		_, file := filepath.Split(full)
+		return file
+		// slist := strings.Split(full, "/")
+		// var splitIndex = 0
+		// for idx, fname := range slist {
+		// 	if strings.HasPrefix(fname, "..") {
+		// 		splitIndex = idx
+		// 	} else if strings.HasPrefix(fname, "gsframe") {
+		// 		splitIndex = idx
+		// 		break
+		// 	}
+		// }
+		// slist = slist[splitIndex:]
+		// if len(slist) > 3 && !strings.HasPrefix(slist[0], "gsframe") {
+		// 	slist = slist[len(slist)-3:]
+		// }
+		// return filepath.Join(slist...)
+	}
+
 	consoleWriter = &zerolog.ConsoleWriter{
-		Out: os.Stdout,
-		// FormatLevel: func(i interface{}) string {
-		// 	if l, ok := i.(zerolog.Level); ok {
-		// 		return l.String()
-		// 	}
-		// 	if l, ok := i.(string); ok {
-		// 		return l
-		// 	}
-		// 	return "???"
-		// },
+		Out:          os.Stdout,
 		TimeFormat:   time.DateTime,
 		TimeLocation: gsinf.TimeZoneLocation,
+		FormatCaller: formatCaller,
+		NoColor:      false,
 		PartsOrder: []string{
-			zerolog.CallerFieldName,
 			zerolog.TimestampFieldName,
+			zerolog.CallerFieldName,
 			zerolog.LevelFieldName,
 			zerolog.MessageFieldName,
 		},
@@ -101,10 +116,23 @@ func Init() {
 			MaxSize:    64,          //单个文件最大尺寸 (MB)
 			MaxBackups: 512,         //最多保留的旧文件数量
 			MaxAge:     28,          //旧文件最长保留天数
-			LocalTime:  true,
-			Compress:   false, //是否压缩旧文件为 .gz
+			// LocalTime:  true,
+			Compress: false, //是否压缩旧文件为 .gz
 		}
-		multiWriter = zerolog.MultiLevelWriter(&logFile, consoleWriter)
+		textWriter := zerolog.ConsoleWriter{
+			Out:          &logFile,
+			TimeFormat:   time.DateTime,
+			TimeLocation: gsinf.TimeZoneLocation,
+			FormatCaller: formatCaller,
+			NoColor:      true,
+			PartsOrder: []string{
+				zerolog.TimestampFieldName,
+				zerolog.CallerFieldName,
+				zerolog.LevelFieldName,
+				zerolog.MessageFieldName,
+			},
+		}
+		multiWriter = zerolog.MultiLevelWriter(textWriter, consoleWriter)
 	} else {
 		multiWriter = zerolog.MultiLevelWriter(consoleWriter)
 	}
@@ -162,12 +190,6 @@ func getCaller(step int) string {
 	_, file, line, ok := runtime.Caller(step)
 	if !ok {
 		return fmt.Sprintf("%s:%d", file, line)
-	}
-	slist := strings.Split(file, "/")
-	for idx, fname := range slist {
-		if strings.HasPrefix(fname, "gsframe") {
-			return fmt.Sprintf("%s:%d", filepath.Join(slist[idx:]...), line)
-		}
 	}
 
 	return fmt.Sprintf("%s:%d", file, line)
