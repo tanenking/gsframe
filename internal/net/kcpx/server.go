@@ -35,6 +35,7 @@ func CreateServer(_config *gsinf.KcpServerConfig) gsinf.IKcpServer {
 		connectionPool: make(chan *connection, _config.MaxConn),
 		groupMsgList:   [common.MaxGroupMsgCount]*common.GroupMessage{},
 	}
+	_server.groupMsgList[_server.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
 	_server.start()
 	return _server
 }

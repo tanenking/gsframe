@@ -199,29 +199,24 @@ func (c *connection) start() {
 	c.finalizer()
 }
 
-func (c *connection) readMessage(conn *websocket.Conn, bs []byte) (int, error) {
+func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (int, error) {
 	if conn == nil {
 		return 0, errors.New(`readMessage conn is nil`)
 	}
-	bs = bs[:0]
 	msgType, reader, err := conn.NextReader()
 	if err != nil {
 		return 0, err
 	}
-
+	bs.Data = bs.Data[:0]
+	var recvtotal = 0
+	var recv = make([]byte, cap(bs.Data))
 	for {
-		if len(bs) >= cap(bs)-1024 {
-			newBuf := make([]byte, len(bs), cap(bs)*2)
-			copy(newBuf, bs)
-			bs = newBuf
-		}
-
-		n, err := reader.Read(bs[len(bs):cap(bs)])
-		// if n > 0 {
-		// 	bs = bs[:len(bs)+n]
-		// }
-		if n <= 0 {
-
+		recv = recv[:0]
+		var recvcount int
+		recvcount, err = reader.Read(recv)
+		if err != nil {
+			logger.Log().Error("kcp read error %v", err)
+			return msgType, err
 		}
 		if err == io.EOF {
 			break
@@ -229,10 +224,54 @@ func (c *connection) readMessage(conn *websocket.Conn, bs []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	}
+		if cap(bs.Data) < (recvtotal + recvcount) {
+			//扩容
+			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
+			copy(newBuf, bs.Data)
+			bs.Data = newBuf
+		}
+		copy(bs.Data[recvtotal:], recv)
+		recvtotal += recvcount
 
+		totallen := common.ReadMessageTotalLength(bs.Data, config.ByteOrder)
+		if recvtotal >= int(totallen) {
+			break
+		}
+	}
 	return msgType, nil
 }
+
+// func (c *connection) readMessage(conn *websocket.Conn, bs *common.ByteBuffer) (int, error) {
+// 	if conn == nil {
+// 		return 0, errors.New(`readMessage conn is nil`)
+// 	}
+// 	bs.Data = bs.Data[:0]
+// 	msgType, reader, err := conn.NextReader()
+// 	if err != nil {
+// 		return 0, err
+// 	}
+
+// 	for {
+// 		if len(bs.Data) >= cap(bs.Data)-1024 {
+// 			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
+// 			copy(newBuf, bs.Data)
+// 			bs.Data = newBuf
+// 		}
+
+// 		n, err := reader.Read(bs.Data[len(bs.Data):cap(bs.Data)])
+// 		if n > 0 {
+// 			bs.Data = bs.Data[:len(bs.Data)+n]
+// 		}
+// 		if err == io.EOF {
+// 			break
+// 		}
+// 		if err != nil {
+// 			return 0, err
+// 		}
+// 	}
+
+// 	return msgType, nil
+// }
 
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *connection) startReader() {
@@ -261,20 +300,20 @@ func (c *connection) startReader() {
 				c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
 				switch t {
 				case websocket.TextMessage:
-					logger.Log().Debug("TextMessage -> %s", string(bs))
+					logger.Log().Debug("TextMessage -> %s", string(bs.Data))
 				case websocket.PingMessage:
-					logger.Log().Debug("PingMessage -> %s", string(bs))
+					logger.Log().Debug("PingMessage -> %s", string(bs.Data))
 				case websocket.PongMessage:
-					// logger.Log().Debug("PongMessage -> %s", string(bs))
+					// logger.Log().Debug("PongMessage -> %s", string(bs.Data))
 				case websocket.CloseMessage:
-					logger.Log().Debug("CloseMessage -> %s", string(bs))
+					logger.Log().Debug("CloseMessage -> %s", string(bs.Data))
 					return
 				case websocket.BinaryMessage:
 					msg := common.CreateMessage(config.ByteOrder)
 					defer func() {
 						common.DeleteMessage(msg)
 					}()
-					err := msg.FromBytes(bs)
+					err := msg.FromBytes(bs.Data)
 					if err != nil {
 						logger.Log().Error("ws msg.FromBytes %v", err)
 						return
@@ -299,10 +338,10 @@ func (c *connection) startReader() {
 	}
 }
 
-func (c *connection) writeMessage(data []byte) error {
+func (c *connection) writeMessage(bs *common.ByteBuffer) error {
 	deadline := time.Now().Add(config.WriteTimeout)
 	c.conn.SetWriteDeadline(deadline)
-	err := c.conn.WriteMessage(websocket.BinaryMessage, data)
+	err := c.conn.WriteMessage(websocket.BinaryMessage, bs.Data)
 	if err == nil {
 		return err
 	}
@@ -314,7 +353,7 @@ func (c *connection) writeMessage(data []byte) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		// 重试一次
 		time.Sleep(100 * time.Millisecond)
-		return c.conn.WriteMessage(websocket.BinaryMessage, data)
+		return c.conn.WriteMessage(websocket.BinaryMessage, bs.Data)
 	}
 	return nil
 }

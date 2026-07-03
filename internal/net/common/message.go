@@ -62,20 +62,25 @@ func (msg *Message) GetByteOrder() binary.ByteOrder {
 func (msg *Message) SetMsgID(msgID string) {
 	msg.ID = msgID
 }
-func (msg *Message) ToBytes(outbs []byte) error {
+func (msg *Message) ToBytes(outbs *ByteBuffer) error {
 	var nameSize = uint8(len(msg.ID))
-	var totalLen = len(msg.Data) + binary.Size(msg.Header) + binary.Size(nameSize) + int(nameSize)
-	if cap(outbs) < totalLen {
-		outbs = make([]byte, 0, totalLen)
+	var totalLen int32 = 0
+	totalLen = int32(binary.Size(totalLen) + binary.Size(msg.Header) + binary.Size(nameSize) + int(nameSize) + len(msg.Data))
+	if cap(outbs.Data) < int(totalLen) {
+		outbs.Data = make([]byte, 0, totalLen)
 	}
 	//创建一个写入缓冲区
-	dataBuff := bytes.NewBuffer(outbs)
+	dataBuff := bytes.NewBuffer(outbs.Data)
 
-	//先写入8字节header
+	//写入4字节消息总长度
+	if err := binary.Write(dataBuff, msg.byteorder, totalLen); err != nil {
+		return err
+	}
+	//写入8字节header
 	if err := binary.Write(dataBuff, msg.byteorder, msg.Header); err != nil {
 		return err
 	}
-	//再写入id字节长度
+	//写入id字节长度
 	if err := binary.Write(dataBuff, msg.byteorder, nameSize); err != nil {
 		return err
 	}
@@ -85,7 +90,7 @@ func (msg *Message) ToBytes(outbs []byte) error {
 			return err
 		}
 	}
-	//再写入data数据
+	//写入data数据
 	if len(msg.Data) > 0 {
 		if err := binary.Write(dataBuff, msg.byteorder, msg.Data); err != nil {
 			return err
@@ -96,11 +101,16 @@ func (msg *Message) ToBytes(outbs []byte) error {
 func (msg *Message) FromBytes(inbs []byte) error {
 	//创建一个从输入二进制数据的ioReader
 	dataBuff := bytes.NewReader(inbs)
-	//先读取8字节header
+	var totalLen int32 = 0
+	//读取4字节消息总长度
+	if err := binary.Read(dataBuff, msg.byteorder, &totalLen); err != nil {
+		return err
+	}
+	//读取8字节header
 	if err := binary.Read(dataBuff, msg.byteorder, &msg.Header); err != nil {
 		return err
 	}
-	//先读id字节长度
+	//读id字节长度
 	var nameSize uint8 = 0
 	if err := binary.Read(dataBuff, msg.byteorder, &nameSize); err != nil {
 		return err
@@ -109,15 +119,15 @@ func (msg *Message) FromBytes(inbs []byte) error {
 	if nameSize > 0 {
 		name := CreateByteBuffer(256)
 		defer DeleteByteBuffer(name)
-		if err := binary.Read(dataBuff, msg.byteorder, name); err != nil {
+		if err := binary.Read(dataBuff, msg.byteorder, name.Data); err != nil {
 			return err
 		}
-		msg.ID = string(name)
+		msg.ID = string(name.Data)
 	} else {
 		msg.ID = ``
 	}
 
-	var dataLen = len(inbs) - binary.Size(msg.Header) - binary.Size(nameSize) - int(nameSize)
+	var dataLen = len(inbs) - binary.Size(totalLen) - binary.Size(msg.Header) - binary.Size(nameSize) - int(nameSize)
 	if cap(msg.Data) < dataLen {
 		msg.Data = make([]byte, 0, dataLen)
 	}
@@ -129,4 +139,15 @@ func (msg *Message) FromBytes(inbs []byte) error {
 		}
 	}
 	return nil
+}
+
+func ReadMessageTotalLength(bs []byte, byteorder binary.ByteOrder) int32 {
+	var totalLen int32 = 0
+	if len(bs) < binary.Size(totalLen) {
+		return totalLen
+	}
+	if byteorder == binary.LittleEndian {
+		return int32(binary.LittleEndian.Uint32(bs[:binary.Size(totalLen)]))
+	}
+	return int32(binary.BigEndian.Uint32(bs[:binary.Size(totalLen)]))
 }

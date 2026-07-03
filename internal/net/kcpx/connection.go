@@ -172,6 +172,41 @@ func (c *connection) start() {
 	c.finalizer()
 }
 
+func (c *connection) readMessage(bs *common.ByteBuffer) (err error) {
+	if c.conn == nil {
+		return errors.New(`kcp readMessage conn is nil`)
+	}
+	bs.Data = bs.Data[:0]
+	var recvtotal = 0
+	var recv = make([]byte, cap(bs.Data))
+	for {
+		recv = recv[:0]
+		var recvcount int
+		recvcount, err = c.conn.Read(recv)
+		if err != nil {
+			logger.Log().Error("kcp read error %v", err)
+			return
+		}
+		if recvcount == 0 {
+			return
+		}
+		if cap(bs.Data) < (recvtotal + recvcount) {
+			//扩容
+			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
+			copy(newBuf, bs.Data)
+			bs.Data = newBuf
+		}
+		copy(bs.Data[recvtotal:], recv)
+		recvtotal += recvcount
+
+		totallen := common.ReadMessageTotalLength(bs.Data, config.ByteOrder)
+		if recvtotal >= int(totallen) {
+			break
+		}
+	}
+	return
+}
+
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *connection) startReader() {
 	defer constants.AutoRecover()()
@@ -191,7 +226,12 @@ func (c *connection) startReader() {
 					common.DeleteByteBuffer(bs)
 				}()
 				c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
-				_, err := c.conn.Read(bs)
+				// _, err := c.conn.Read(bs.Data)
+				// if err != nil {
+				// 	logger.Log().Error("kcp read error %v", err)
+				// 	return
+				// }
+				err := c.readMessage(bs)
 				if err != nil {
 					logger.Log().Error("kcp read error %v", err)
 					return
@@ -201,7 +241,7 @@ func (c *connection) startReader() {
 				defer func() {
 					common.DeleteMessage(msg)
 				}()
-				err = msg.FromBytes(bs)
+				err = msg.FromBytes(bs.Data)
 				if err != nil {
 					logger.Log().Error("kcp msg.FromBytes %v", err)
 					return
@@ -260,7 +300,7 @@ func (c *connection) startWriter() {
 					}
 					deadline := time.Now().Add(config.WriteTimeout)
 					c.conn.SetWriteDeadline(deadline)
-					_, err := c.conn.Write(bs)
+					_, err := c.conn.Write(bs.Data)
 					if err != nil {
 						logger.Log().Error(`kcp Write error %+v`, err)
 						return
@@ -308,7 +348,7 @@ func (c *connection) sendRest() {
 						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
 						return
 					}
-					_, err := c.conn.Write(bs)
+					_, err := c.conn.Write(bs.Data)
 					if err != nil {
 						logger.Log().Error(`kcp Write error %+v`, err)
 						return
