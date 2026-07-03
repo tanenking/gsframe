@@ -75,14 +75,37 @@ func Init() {
 		fullpath = filepath.Join(fullpath, constants.ServiceType)
 		logFilePath = filepath.Join(fullpath, filename)
 	}
+
+	formatCaller := func(i interface{}) string {
+		full := i.(string)
+		_, file := filepath.Split(full)
+		return file
+		// slist := strings.Split(full, "/")
+		// var splitIndex = 0
+		// for idx, fname := range slist {
+		// 	if strings.HasPrefix(fname, "..") {
+		// 		splitIndex = idx
+		// 	} else if strings.HasPrefix(fname, "gsframe") {
+		// 		splitIndex = idx
+		// 		break
+		// 	}
+		// }
+		// slist = slist[splitIndex:]
+		// if len(slist) > 3 && !strings.HasPrefix(slist[0], "gsframe") {
+		// 	slist = slist[len(slist)-3:]
+		// }
+		// return filepath.Join(slist...)
+	}
+
 	consoleWriter = &zerolog.ConsoleWriter{
 		Out:          os.Stdout,
 		TimeFormat:   time.DateTime,
 		TimeLocation: gsinf.TimeZoneLocation,
+		FormatCaller: formatCaller,
 		NoColor:      false,
 		PartsOrder: []string{
-			zerolog.CallerFieldName,
 			zerolog.TimestampFieldName,
+			zerolog.CallerFieldName,
 			zerolog.LevelFieldName,
 			zerolog.MessageFieldName,
 		},
@@ -100,10 +123,11 @@ func Init() {
 			Out:          &logFile,
 			TimeFormat:   time.DateTime,
 			TimeLocation: gsinf.TimeZoneLocation,
+			FormatCaller: formatCaller,
 			NoColor:      true,
 			PartsOrder: []string{
-				zerolog.CallerFieldName,
 				zerolog.TimestampFieldName,
+				zerolog.CallerFieldName,
 				zerolog.LevelFieldName,
 				zerolog.MessageFieldName,
 			},
@@ -166,12 +190,6 @@ func getCaller(step int) string {
 	_, file, line, ok := runtime.Caller(step)
 	if !ok {
 		return fmt.Sprintf("%s:%d", file, line)
-	}
-	slist := strings.Split(file, "/")
-	for idx, fname := range slist {
-		if strings.HasPrefix(fname, "gsframe") {
-			return fmt.Sprintf("%s:%d", filepath.Join(slist[idx:]...), line)
-		}
 	}
 
 	return fmt.Sprintf("%s:%d", file, line)
