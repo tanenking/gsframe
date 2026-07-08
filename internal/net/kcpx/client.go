@@ -14,25 +14,20 @@ type client struct {
 	cindex     int32
 	ccount     int32
 	connectors chan *clientImpl
+	semaphore  chan struct{} //最大并发创建数
 }
 
 func CreateClient(opt *gsinf.KcpClientConfig) gsinf.IKcpClient {
 	validateClientConfig(opt)
 
-	var chancount = opt.PoolSize
-	if chancount < 1024 {
-		chancount = 1024
+	if opt.PoolSize > 1024 {
+		opt.PoolSize = 1024
 	}
+	var chancount = opt.PoolSize
 
 	var _client = &client{
 		connectors: make(chan *clientImpl, chancount),
-	}
-	for range opt.PoolSize {
-		_clientImpl := _client.createNewClientImpl()
-		if _clientImpl == nil {
-			continue
-		}
-		_client.connectors <- _clientImpl
+		semaphore:  make(chan struct{}, 5),
 	}
 
 	_client.start()
@@ -89,16 +84,34 @@ func (r *client) healthCheck() {
 	}
 }
 func (r *client) getConnector() *clientImpl {
-	select {
-	case connector := <-r.connectors:
-		// 检查连接是否有效
-		if connector.isValid() {
+	fnget := func() *clientImpl {
+		select {
+		case connector := <-r.connectors:
+			if connector.isValid() {
+				return connector
+			}
+			connector.stop()
+			atomic.AddInt32(&r.ccount, -1)
+		default:
+		}
+		return nil
+	}
+	for {
+		if connector := fnget(); connector != nil {
 			return connector
 		}
-		return r.createNewClientImpl()
-	case <-time.After(100 * time.Millisecond):
-		// 池空且未超时，尝试新建
-		return r.createNewClientImpl()
+		select {
+		case r.semaphore <- struct{}{}:
+			//获取到创建许可
+			<-r.semaphore
+			if atomic.LoadInt32(&r.ccount) < int32(r.opt.PoolSize) {
+				connector := r.createNewClientImpl()
+				if connector != nil {
+					return connector
+				}
+			}
+		default:
+		}
 	}
 }
 func (r *client) putConnector(connector *clientImpl) {
@@ -112,9 +125,9 @@ func (r *client) putConnector(connector *clientImpl) {
 	}
 	select {
 	case r.connectors <- connector:
-		// 归还成功
+		//归还成功
 	default:
-		// 池已满，关闭连接
+		//池已满,关闭连接
 		connector.stop()
 		atomic.AddInt32(&r.ccount, -1)
 	}
