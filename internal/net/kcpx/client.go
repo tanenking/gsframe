@@ -20,14 +20,14 @@ type client struct {
 func CreateClient(opt *gsinf.KcpClientConfig) gsinf.IKcpClient {
 	validateClientConfig(opt)
 
-	if opt.PoolSize > 1024 {
-		opt.PoolSize = 1024
+	if opt.PoolSize > 200 {
+		opt.PoolSize = 200
 	}
 	var chancount = opt.PoolSize
 
 	var _client = &client{
 		connectors: make(chan *clientImpl, chancount),
-		semaphore:  make(chan struct{}, 5),
+		semaphore:  make(chan struct{}, 1),
 	}
 
 	_client.start()
@@ -103,14 +103,17 @@ func (r *client) getConnector() *clientImpl {
 		select {
 		case r.semaphore <- struct{}{}:
 			//获取到创建许可
-			<-r.semaphore
-			if atomic.LoadInt32(&r.ccount) < int32(r.opt.PoolSize) {
-				connector := r.createNewClientImpl()
-				if connector != nil {
-					return connector
+			var connector = func() *clientImpl {
+				defer func() { <-r.semaphore }()
+				if atomic.LoadInt32(&r.ccount) < int32(r.opt.PoolSize) {
+					return r.createNewClientImpl()
 				}
+				return nil
+			}()
+			if connector != nil {
+				return connector
 			}
-		case <-time.After(2 * time.Millisecond):
+		case <-time.After(1 * time.Millisecond):
 		}
 	}
 }

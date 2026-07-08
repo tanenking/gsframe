@@ -5,7 +5,6 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
@@ -15,12 +14,10 @@ import (
 )
 
 type server struct {
-	sync.Mutex
-	closed         atomic.Int32
-	connections    []*connection
-	cindex         int32
-	ccount         int32
-	connectionPool chan *connection
+	closed      atomic.Int32
+	connections sync.Map //int32 => *connection
+	idgenerate  int32
+	ccount      int32
 
 	groupMsgSeq  uint16
 	groupMsgSync sync.Mutex
@@ -31,9 +28,7 @@ func CreateServer(_config *gsinf.KcpServerConfig) gsinf.IKcpServer {
 	config = _config
 	validateConfig()
 	_server := &server{
-		connections:    make([]*connection, _config.MaxConn),
-		connectionPool: make(chan *connection, _config.MaxConn),
-		groupMsgList:   [common.MaxGroupMsgCount]*common.GroupMessage{},
+		groupMsgList: [common.MaxGroupMsgCount]*common.GroupMessage{},
 	}
 	_server.groupMsgList[_server.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
 	_server.start()
@@ -41,11 +36,14 @@ func CreateServer(_config *gsinf.KcpServerConfig) gsinf.IKcpServer {
 }
 
 func (r *server) GetConnection(connId int32) gsinf.IKcpConnection {
-	if connId <= 0 || connId > config.MaxConn {
+	if connId <= 0 {
 		return nil
 	}
-	idx := connId - 1
-	return r.connections[idx]
+	val, ok := r.connections.Load(connId)
+	if !ok {
+		return nil
+	}
+	return val.(*connection)
 }
 
 func (r *server) GetConnectionCount() int32 {
@@ -74,41 +72,17 @@ func (r *server) SendGroup(groupName string, header int64, msgID string, data []
 	close(gmsg.C)
 }
 
-func (r *server) findNextFreeIndex() int32 {
-	for i := 0; i < int(config.MaxConn); i++ {
-		if r.connections[r.cindex] == nil {
-			return r.cindex
-		}
-		r.cindex = (r.cindex + 1) % config.MaxConn
-	}
-	return -1
-}
-
 func (r *server) getFreeConnection() *connection {
-	select {
-	case conn, ok := <-r.connectionPool:
-		if !ok {
-			return nil
-		}
-		return conn
-	case <-time.After(100 * time.Millisecond):
-		// 池空且未超时，尝试新建
-		if r.ccount < config.MaxConn {
-			conn := newConnection()
-			r.ccount++
-			return conn
-		}
-		return nil
-	}
+	return connectionPool.Get().(*connection)
 }
 
 func (r *server) freeConnection(conn *connection) {
-	select {
-	case r.connectionPool <- conn:
-		// 归还成功
-	default:
-		// 池已满, 放弃这个连接
+	if conn == nil {
+		return
 	}
+	atomic.AddInt32(&r.ccount, -1)
+	r.connections.Delete(conn.connId)
+	connectionPool.Put(conn)
 }
 
 func (r *server) start() {
@@ -162,31 +136,17 @@ func (r *server) accept(conn *kcp.UDPSession) {
 		}
 	}
 
-	r.Lock()
-	defer r.Unlock()
-
-	if r.ccount >= config.MaxConn {
-		logger.Log().Error("kcp当前连接数量超过最大值,放弃新连接")
-		conn.Close()
-		return
-	}
-
-	var index = r.findNextFreeIndex()
-	if index < 0 {
-		logger.Log().Error("kcp当前连接数量超过最大值,放弃新连接")
-		conn.Close()
-		return
-	}
-
 	var dealConn = r.getFreeConnection()
 	if dealConn == nil {
 		logger.Log().Error("kcp新建connection失败")
 		conn.Close()
 		return
 	}
-	r.connections[index] = dealConn
+	atomic.AddInt32(&r.ccount, 1)
+	connId := atomic.AddInt32(&r.idgenerate, 1)
+	r.connections.Store(connId, dealConn)
 
-	dealConn.init(r, conn, index+1)
+	dealConn.init(r, conn, connId)
 
 	constants.Go(func() { dealConn.start() })
 }

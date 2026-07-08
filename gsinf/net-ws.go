@@ -45,8 +45,6 @@ type WebSocketServerConfig struct {
 	TcpReadWriteBufferSize int32
 	//数据包的最大值
 	MaxPacketSize int32
-	//当前服务器主机允许的最大链接个数
-	MaxConn int32
 	//发送消息的缓冲最大长度
 	WriteMessageBufferLen int32
 	//读超时时间

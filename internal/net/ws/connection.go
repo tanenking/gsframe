@@ -17,6 +17,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
+var connectionPool = sync.Pool{
+	New: func() any {
+		return newConnection()
+	},
+}
+
 type connection struct {
 	_server       *server
 	ctx           context.Context
@@ -451,7 +457,6 @@ func (c *connection) finalizer() {
 	c.conn = nil
 
 	//将链接从连接管理器中删除
-	c._server.connections[c.connId] = nil
 	c._server.freeConnection(c)
 
 	c.writeBufferList = nil

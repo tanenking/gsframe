@@ -19,7 +19,6 @@ func init() {
 	//初始化GlobalObject变量，设置一些默认值
 	config = &gsinf.KcpServerConfig{
 		Port:                   0,
-		MaxConn:                5000,
 		GoReadWriteBufferSize:  4096,
 		TcpReadWriteBufferSize: 256 * 1024, //256k
 		MaxPacketSize:          4096,
@@ -34,11 +33,6 @@ func init() {
 }
 
 func validateConfig() {
-	if config.MaxConn < 3000 {
-		config.MaxConn = 3000
-	} else if config.MaxConn > 10000 {
-		config.MaxConn = 10000
-	}
 	if config.GoReadWriteBufferSize <= 0 {
 		config.GoReadWriteBufferSize = 4096
 	} else if config.GoReadWriteBufferSize > 65535 {
