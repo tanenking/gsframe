@@ -217,15 +217,16 @@ func (c *connection) readMessage(bs *common.ByteBuffer) (int, error) {
 	var recvtotal = 0
 	var recv = make([]byte, cap(bs.Data))
 	for {
+		c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
 		recv = recv[:cap(recv)]
 		var recvcount int
 		recvcount, err = reader.Read(recv)
-		if err != nil {
-			logger.Log().Error("kcp read error %v", err)
-			return msgType, err
-		}
 		if err == io.EOF {
 			break
+		}
+		if err != nil {
+			logger.Log().Error("ws read error %v", err)
+			return msgType, err
 		}
 		recv = recv[:recvcount]
 		if cap(bs.Data) < (recvtotal + recvcount) {
@@ -270,7 +271,6 @@ func (c *connection) startReader() {
 					return
 				}
 				c.lastHeartTime = time.Now().Unix()
-				c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
 				switch t {
 				case websocket.TextMessage:
 					logger.Log().Debug("TextMessage -> %s", string(bs.Data))

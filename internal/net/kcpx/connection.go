@@ -57,13 +57,13 @@ func (c *connection) init(_server *server, conn *kcp.UDPSession, connId int32) b
 	c.groupMsgSeq = c._server.groupMsgSeq
 	c.groupMap = sync.Map{}
 
-	conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
+	conn.SetReadDeadline(time.Time{})
 	conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
 
 	conn.SetRateLimit(0)
 	conn.SetStreamMode(config.StreamMode)
 	conn.SetNoDelay(1, 10, 2, 1)
-	conn.SetACKNoDelay(config.NoDelay)
+	// conn.SetACKNoDelay(config.NoDelay)
 	conn.SetWindowSize(1024, 1024)
 	conn.SetMtu(1400)
 
@@ -233,12 +233,6 @@ func (c *connection) startReader() {
 				defer func() {
 					common.DeleteByteBuffer(bs)
 				}()
-				c.conn.SetReadDeadline(time.Now().Add(config.ReadTimeout))
-				// _, err := c.conn.Read(bs.Data)
-				// if err != nil {
-				// 	logger.Log().Error("kcp read error %v", err)
-				// 	return
-				// }
 				err := c.readMessage(bs)
 				if err != nil {
 					logger.Log().Error("kcp read error %v", err)

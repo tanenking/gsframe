@@ -42,20 +42,20 @@ func createClientImpl(_client *client, connId int32) *clientImpl {
 
 	impl.conn = conn.(*kcp.UDPSession)
 
-	impl.conn.SetReadDeadline(time.Now().Add(impl._client.opt.ReadTimeout))
+	impl.conn.SetReadDeadline(time.Time{})
 	impl.conn.SetWriteDeadline(time.Now().Add(impl._client.opt.WriteTimeout))
 
 	impl.conn.SetRateLimit(0)
 	impl.conn.SetStreamMode(impl._client.opt.StreamMode)
 	impl.conn.SetNoDelay(1, 10, 2, 1)
-	impl.conn.SetACKNoDelay(impl._client.opt.NoDelay)
+	// impl.conn.SetACKNoDelay(impl._client.opt.NoDelay)
 	impl.conn.SetWindowSize(1024, 1024)
 	impl.conn.SetMtu(1400)
 
 	impl.conn.SetReadBuffer(int(impl._client.opt.TcpReadWriteBufferSize))
 	impl.conn.SetWriteBuffer(int(impl._client.opt.TcpReadWriteBufferSize))
 
-	impl.start()
+	constants.Go(func() { impl.start() })
 
 	return impl
 }
@@ -165,12 +165,6 @@ func (c *clientImpl) startReader() {
 				defer func() {
 					common.DeleteByteBuffer(bs)
 				}()
-				c.conn.SetReadDeadline(time.Now().Add(c._client.opt.ReadTimeout))
-				// _, err := c.conn.Read(bs.Data)
-				// if err != nil {
-				// 	logger.Log().Error("kcp client read error %v", err)
-				// 	return
-				// }
 				err := c.readMessage(bs)
 				if err != nil {
 					logger.Log().Error("kcp client read error %v", err)
