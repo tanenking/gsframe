@@ -30,6 +30,9 @@ func CreateClient(opt *gsinf.KcpClientConfig) gsinf.IKcpClient {
 		connectors: make(chan *clientImpl, chancount),
 		semaphore:  make(chan struct{}, 1),
 	}
+	for range chancount {
+		_client.connectors <- _client.createNewClientImpl()
+	}
 
 	_client.start()
 	return _client
@@ -62,27 +65,27 @@ func (r *client) start() {
 	})
 }
 func (r *client) healthCheck() {
-	ticker := time.NewTicker(10 * time.Second)
-	for range ticker.C {
-		// 检查连接
-		var _break = false
-		for !_break {
-			select {
-			case connector, ok := <-r.connectors:
-				if !ok {
-					return
-				}
-				if !connector.isValid() {
-					connector.stop()
-					atomic.AddInt32(&r.ccount, -1)
-				} else {
-					r.putConnector(connector)
-				}
-			default:
-				_break = true
-			}
-		}
-	}
+	// ticker := time.NewTicker(10 * time.Second)
+	// for range ticker.C {
+	// 	// 检查连接
+	// 	var _break = false
+	// 	for !_break {
+	// 		select {
+	// 		case connector, ok := <-r.connectors:
+	// 			if !ok {
+	// 				return
+	// 			}
+	// 			if !connector.isValid() {
+	// 				connector.stop()
+	// 				atomic.AddInt32(&r.ccount, -1)
+	// 			} else {
+	// 				r.putConnector(connector)
+	// 			}
+	// 		default:
+	// 			_break = true
+	// 		}
+	// 	}
+	// }
 }
 func (r *client) getConnector() *clientImpl {
 	fnget := func() *clientImpl {
@@ -111,7 +114,7 @@ func (r *client) getConnector() *clientImpl {
 				}
 				return nil
 			}()
-		case <-time.After(1 * time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 		}
 	}
 }

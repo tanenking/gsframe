@@ -2,7 +2,6 @@ package kcpx
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -47,10 +46,10 @@ func createClientImpl(_client *client, connId int32) *clientImpl {
 
 	impl.conn.SetRateLimit(0)
 	impl.conn.SetStreamMode(impl._client.opt.StreamMode)
-	impl.conn.SetNoDelay(1, 10, 2, 1)
-	// impl.conn.SetACKNoDelay(impl._client.opt.NoDelay)
-	impl.conn.SetWindowSize(1024, 1024)
-	impl.conn.SetMtu(1400)
+	impl.conn.SetNoDelay(1, 20, 2, 1)
+	impl.conn.SetACKNoDelay(false)
+	impl.conn.SetWindowSize(2048, 2048)
+	impl.conn.SetMtu(1472)
 
 	impl.conn.SetReadBuffer(int(impl._client.opt.TcpReadWriteBufferSize))
 	impl.conn.SetWriteBuffer(int(impl._client.opt.TcpReadWriteBufferSize))
@@ -90,13 +89,29 @@ func (c *clientImpl) send(header int64, msgID string, data []byte) error {
 
 	c.writeBufferList <- msg
 
+	// var bs = common.CreateByteBuffer(int(c._client.opt.MaxPacketSize))
+	// defer func() {
+	// 	common.DeleteByteBuffer(bs)
+	// }()
+	// if err := msg.ToBytes(bs); err != nil {
+	// 	logger.Log().Error(`kcp 消息打包错误 %+v`, err)
+	// 	return err
+	// }
+	// deadline := time.Now().Add(c._client.opt.WriteTimeout)
+	// c.conn.SetWriteDeadline(deadline)
+	// _, err := c.conn.Write(bs.Data)
+	// if err != nil {
+	// 	logger.Log().Error(`kcp client Write error %+v`, err)
+	// 	return err
+	// }
+
 	return nil
 }
 
 func (c *clientImpl) start() {
-	constants.Go(func() {
-		c.startReader()
-	})
+	// constants.Go(func() {
+	// 	c.startReader()
+	// })
 	constants.Go(func() {
 		c.startWriter()
 	})
@@ -112,84 +127,84 @@ func (c *clientImpl) start() {
 	c.finalizer()
 }
 
-func (c *clientImpl) readMessage(bs *common.ByteBuffer) (err error) {
-	if c.conn == nil {
-		return errors.New(`kcp client readMessage conn is nil`)
-	}
-	bs.Data = bs.Data[:0]
-	var recvtotal = 0
-	var recv = make([]byte, cap(bs.Data))
-	for {
-		recv = recv[:0]
-		var recvcount int
-		recvcount, err = c.conn.Read(recv)
-		if err != nil {
-			logger.Log().Error("kcp client read error %v", err)
-			return
-		}
-		if recvcount == 0 {
-			return
-		}
-		if cap(bs.Data) < (recvtotal + recvcount) {
-			//扩容
-			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
-			copy(newBuf, bs.Data)
-			bs.Data = newBuf
-		}
-		copy(bs.Data[recvtotal:], recv)
-		recvtotal += recvcount
+// func (c *clientImpl) readMessage(bs *common.ByteBuffer) (err error) {
+// 	if c.conn == nil {
+// 		return errors.New(`kcp client readMessage conn is nil`)
+// 	}
+// 	bs.Data = bs.Data[:0]
+// 	var recvtotal = 0
+// 	var recv = make([]byte, cap(bs.Data))
+// 	for {
+// 		recv = recv[:0]
+// 		var recvcount int
+// 		recvcount, err = c.conn.Read(recv)
+// 		if err != nil {
+// 			logger.Log().Error("kcp client read error %v", err)
+// 			return
+// 		}
+// 		if recvcount == 0 {
+// 			return
+// 		}
+// 		if cap(bs.Data) < (recvtotal + recvcount) {
+// 			//扩容
+// 			newBuf := make([]byte, len(bs.Data), cap(bs.Data)*2)
+// 			copy(newBuf, bs.Data)
+// 			bs.Data = newBuf
+// 		}
+// 		copy(bs.Data[recvtotal:], recv)
+// 		recvtotal += recvcount
 
-		totallen := common.ReadMessageTotalLength(bs.Data, config.ByteOrder)
-		if recvtotal >= int(totallen) {
-			break
-		}
-	}
-	return
-}
+// 		totallen := common.ReadMessageTotalLength(bs.Data, config.ByteOrder)
+// 		if recvtotal >= int(totallen) {
+// 			break
+// 		}
+// 	}
+// 	return
+// }
 
-// StartReader 读消息Goroutine，用于从客户端中读取数据
-func (c *clientImpl) startReader() {
-	defer constants.AutoRecover()()
-	logger.Log().Debug("kcp client [Reader Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("kcp client [Reader exit!] id = %d", c.connId)
-	defer c.stop()
+// // StartReader 读消息Goroutine，用于从客户端中读取数据
+// func (c *clientImpl) startReader() {
+// 	defer constants.AutoRecover()()
+// 	logger.Log().Debug("kcp client [Reader Goroutine is running] id = %d", c.connId)
+// 	defer logger.Log().Debug("kcp client [Reader exit!] id = %d", c.connId)
+// 	defer c.stop()
 
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		default:
-			ret := func() (ret bool) {
-				defer constants.AutoRecover()()
-				var bs = common.CreateByteBuffer(int(c._client.opt.MaxPacketSize))
-				defer func() {
-					common.DeleteByteBuffer(bs)
-				}()
-				err := c.readMessage(bs)
-				if err != nil {
-					logger.Log().Error("kcp client read error %v", err)
-					return
-				}
-				msg := common.CreateMessage(c._client.opt.ByteOrder)
-				defer func() {
-					common.DeleteMessage(msg)
-				}()
-				err = msg.FromBytes(bs.Data)
-				if err != nil {
-					logger.Log().Error("kcp client msg.FromBytes %v", err)
-					return
-				}
-				if c._client.opt.MessageCallback != nil {
-					c._client.opt.MessageCallback.Handle(msg)
-				}
-				return true
-			}()
-			if !ret {
-				return
-			}
-		}
-	}
-}
+// 	for {
+// 		select {
+// 		case <-c.ctx.Done():
+// 			return
+// 		default:
+// 			ret := func() (ret bool) {
+// 				defer constants.AutoRecover()()
+// 				var bs = common.CreateByteBuffer(int(c._client.opt.MaxPacketSize))
+// 				defer func() {
+// 					common.DeleteByteBuffer(bs)
+// 				}()
+// 				err := c.readMessage(bs)
+// 				if err != nil {
+// 					logger.Log().Error("kcp client read error %v", err)
+// 					return
+// 				}
+// 				msg := common.CreateMessage(c._client.opt.ByteOrder)
+// 				defer func() {
+// 					common.DeleteMessage(msg)
+// 				}()
+// 				err = msg.FromBytes(bs.Data)
+// 				if err != nil {
+// 					logger.Log().Error("kcp client msg.FromBytes %v", err)
+// 					return
+// 				}
+// 				if c._client.opt.MessageCallback != nil {
+// 					c._client.opt.MessageCallback.Handle(msg)
+// 				}
+// 				return true
+// 			}()
+// 			if !ret {
+// 				return
+// 			}
+// 		}
+// 	}
+// }
 
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *clientImpl) startWriter() {

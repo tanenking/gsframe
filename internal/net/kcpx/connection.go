@@ -62,10 +62,10 @@ func (c *connection) init(_server *server, conn *kcp.UDPSession, connId int32) b
 
 	conn.SetRateLimit(0)
 	conn.SetStreamMode(config.StreamMode)
-	conn.SetNoDelay(1, 10, 2, 1)
-	// conn.SetACKNoDelay(config.NoDelay)
-	conn.SetWindowSize(1024, 1024)
-	conn.SetMtu(1400)
+	conn.SetNoDelay(1, 20, 2, 1)
+	conn.SetACKNoDelay(false)
+	conn.SetWindowSize(2048, 2048)
+	conn.SetMtu(1472)
 
 	conn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
 	conn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
@@ -163,9 +163,9 @@ func (c *connection) start() {
 	constants.Go(func() {
 		c.startReader()
 	})
-	constants.Go(func() {
-		c.startWriter()
-	})
+	// constants.Go(func() {
+	// 	c.startWriter()
+	// })
 
 	<-c.ctx.Done()
 
@@ -173,7 +173,7 @@ func (c *connection) start() {
 	close(c.writeBufferList)
 
 	//关闭连接,将还未发送完的数据发完
-	c.sendRest()
+	// c.sendRest()
 
 	c.finalizer()
 }
@@ -265,110 +265,111 @@ func (c *connection) startReader() {
 }
 
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
-func (c *connection) startWriter() {
-	defer constants.AutoRecover()()
-	logger.Log().Debug("kcp [Writer Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("kcp [Writer exit!] id = %d", c.connId)
-	defer c.Stop()
+// func (c *connection) startWriter() {
+// 	defer constants.AutoRecover()()
+// 	logger.Log().Debug("kcp [Writer Goroutine is running] id = %d", c.connId)
+// 	defer logger.Log().Debug("kcp [Writer exit!] id = %d", c.connId)
+// 	defer c.Stop()
 
-	//20秒检测一次,180秒视为连接关闭
-	var interval_impl = time.Second * 20
-	var _keeptimer = time.NewTimer(interval_impl)
+// 	//20秒检测一次,180秒视为连接关闭
+// 	var interval_impl = time.Second * 20
+// 	var _keeptimer = time.NewTimer(interval_impl)
 
-	gmsg := c._server.groupMsgList[c.groupMsgSeq]
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-_keeptimer.C:
-			if time.Now().Unix()-c.lastHeartTime >= config.HeartTimeoutSec {
-				logger.Log().Error("udp 心跳超时")
-				return
-			}
-			_keeptimer.Reset(interval_impl)
-		case msg, ok := <-c.writeBufferList:
-			ret := func() (ret bool) {
-				if ok {
-					defer func() {
-						common.DeleteMessage(msg)
-					}()
-					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-					defer func() {
-						common.DeleteByteBuffer(bs)
-					}()
-					if err := msg.ToBytes(bs); err != nil {
-						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
-						return
-					}
-					deadline := time.Now().Add(config.WriteTimeout)
-					c.conn.SetWriteDeadline(deadline)
-					_, err := c.conn.Write(bs.Data)
-					if err != nil {
-						logger.Log().Error(`kcp Write error %+v`, err)
-						return
-					}
-				} else {
-					logger.Log().Debug("writeBufferList is Closed")
-					return
-				}
-				return true
-			}()
-			if !ret {
-				return
-			}
-		case <-gmsg.C:
-			if c.InGroup(gmsg.GroupName) {
-				if c.Send(gmsg.Header, gmsg.MsgID, gmsg.MsgData) != nil {
-					return
-				}
-			}
-			c.groupMsgSeq++
-			if c.groupMsgSeq >= common.MaxGroupMsgCount {
-				c.groupMsgSeq = 0
-			}
-			gmsg = c._server.groupMsgList[c.groupMsgSeq]
-		}
-	}
-}
+// 	gmsg := c._server.groupMsgList[c.groupMsgSeq]
+// 	for {
+// 		select {
+// 		case <-c.ctx.Done():
+// 			return
+// 		case <-_keeptimer.C:
+// 			if time.Now().Unix()-c.lastHeartTime >= config.HeartTimeoutSec {
+// 				logger.Log().Error("udp 心跳超时")
+// 				return
+// 			}
+// 			_keeptimer.Reset(interval_impl)
+// 		case msg, ok := <-c.writeBufferList:
+// 			ret := func() (ret bool) {
+// 				if ok {
+// 					defer func() {
+// 						common.DeleteMessage(msg)
+// 					}()
+// 					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+// 					defer func() {
+// 						common.DeleteByteBuffer(bs)
+// 					}()
+// 					if err := msg.ToBytes(bs); err != nil {
+// 						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
+// 						return
+// 					}
+// 					deadline := time.Now().Add(config.WriteTimeout)
+// 					c.conn.SetWriteDeadline(deadline)
+// 					_, err := c.conn.Write(bs.Data)
+// 					if err != nil {
+// 						logger.Log().Error(`kcp Write error %+v`, err)
+// 						return
+// 					}
+// 				} else {
+// 					logger.Log().Debug("writeBufferList is Closed")
+// 					return
+// 				}
+// 				return true
+// 			}()
+// 			if !ret {
+// 				return
+// 			}
+// 		case <-gmsg.C:
+// 			if c.InGroup(gmsg.GroupName) {
+// 				if c.Send(gmsg.Header, gmsg.MsgID, gmsg.MsgData) != nil {
+// 					return
+// 				}
+// 			}
+// 			c.groupMsgSeq++
+// 			if c.groupMsgSeq >= common.MaxGroupMsgCount {
+// 				c.groupMsgSeq = 0
+// 			}
+// 			gmsg = c._server.groupMsgList[c.groupMsgSeq]
+// 		}
+// 	}
+// }
 
-func (c *connection) sendRest() {
-	defer constants.AutoRecover()()
-	defer logger.Log().Debug("kcp [sendRest!] id = %d", c.connId)
-	for {
-		select {
-		case msg, ok := <-c.writeBufferList:
-			ret := func() (ret bool) {
-				if ok {
-					defer func() {
-						common.DeleteMessage(msg)
-					}()
-					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-					defer func() {
-						common.DeleteByteBuffer(bs)
-					}()
-					if err := msg.ToBytes(bs); err != nil {
-						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
-						return
-					}
-					_, err := c.conn.Write(bs.Data)
-					if err != nil {
-						logger.Log().Error(`kcp Write error %+v`, err)
-						return
-					}
-				} else {
-					logger.Log().Debug("writeBufferList is Closed")
-					return
-				}
-				return true
-			}()
-			if !ret {
-				return
-			}
-		default:
-			return
-		}
-	}
-}
+// func (c *connection) sendRest() {
+// 	defer constants.AutoRecover()()
+// 	defer logger.Log().Debug("kcp [sendRest!] id = %d", c.connId)
+// 	for {
+// 		select {
+// 		case msg, ok := <-c.writeBufferList:
+// 			ret := func() (ret bool) {
+// 				if ok {
+// 					defer func() {
+// 						common.DeleteMessage(msg)
+// 					}()
+// 					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+// 					defer func() {
+// 						common.DeleteByteBuffer(bs)
+// 					}()
+// 					if err := msg.ToBytes(bs); err != nil {
+// 						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
+// 						return
+// 					}
+// 					_, err := c.conn.Write(bs.Data)
+// 					if err != nil {
+// 						logger.Log().Error(`kcp Write error %+v`, err)
+// 						return
+// 					}
+// 				} else {
+// 					logger.Log().Debug("writeBufferList is Closed")
+// 					return
+// 				}
+// 				return true
+// 			}()
+// 			if !ret {
+// 				return
+// 			}
+// 		default:
+// 			return
+// 		}
+// 	}
+// }
+
 func (c *connection) finalizer() {
 	//如果当前链接已经关闭
 	if atomic.LoadInt32(&c.closed) > 0 {
