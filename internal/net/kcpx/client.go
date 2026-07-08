@@ -110,7 +110,7 @@ func (r *client) getConnector() *clientImpl {
 					return connector
 				}
 			}
-		default:
+		case <-time.After(2 * time.Millisecond):
 		}
 	}
 }
