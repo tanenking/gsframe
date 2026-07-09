@@ -69,6 +69,7 @@ func (msg *Message) ToBytes(outbs *ByteBuffer) error {
 	if cap(outbs.Data) < int(totalLen) {
 		outbs.Data = make([]byte, 0, totalLen)
 	}
+	outbs.Data = outbs.Data[:0]
 	//创建一个写入缓冲区
 	dataBuff := bytes.NewBuffer(outbs.Data)
 
@@ -96,7 +97,7 @@ func (msg *Message) ToBytes(outbs *ByteBuffer) error {
 			return err
 		}
 	}
-	outbs.Data = outbs.Data[0:totalLen]
+	outbs.Data = outbs.Data[:totalLen]
 	return nil
 }
 func (msg *Message) FromBytes(inbs []byte) error {

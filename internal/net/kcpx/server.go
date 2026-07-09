@@ -9,7 +9,6 @@ import (
 	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/logger"
-	"github.com/tanenking/gsframe/internal/net/common"
 	"github.com/xtaci/kcp-go/v5"
 )
 
@@ -19,18 +18,18 @@ type server struct {
 	idgenerate  int32
 	ccount      int32
 
-	groupMsgSeq  uint16
-	groupMsgSync sync.Mutex
-	groupMsgList [common.MaxGroupMsgCount]*common.GroupMessage
+	// groupMsgSeq  uint16
+	// groupMsgSync sync.Mutex
+	// groupMsgList [common.MaxGroupMsgCount]*common.GroupMessage
 }
 
 func CreateServer(_config *gsinf.KcpServerConfig) gsinf.IKcpServer {
 	config = _config
 	validateConfig()
 	_server := &server{
-		groupMsgList: [common.MaxGroupMsgCount]*common.GroupMessage{},
+		// groupMsgList: [common.MaxGroupMsgCount]*common.GroupMessage{},
 	}
-	_server.groupMsgList[_server.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
+	// _server.groupMsgList[_server.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
 	_server.start()
 	return _server
 }
@@ -50,27 +49,27 @@ func (r *server) GetConnectionCount() int32 {
 	return r.ccount
 }
 
-func (r *server) SendGroup(groupName string, header int64, msgID string, data []byte) {
-	r.groupMsgSync.Lock()
-	gmsg := r.groupMsgList[r.groupMsgSeq]
-	r.groupMsgSeq++
-	if r.groupMsgSeq >= common.MaxGroupMsgCount {
-		r.groupMsgSeq = 0
-	}
-	r.groupMsgList[r.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
-	r.groupMsgSync.Unlock()
+// func (r *server) SendGroup(groupName string, header int64, msgID string, data []byte) {
+// 	r.groupMsgSync.Lock()
+// 	gmsg := r.groupMsgList[r.groupMsgSeq]
+// 	r.groupMsgSeq++
+// 	if r.groupMsgSeq >= common.MaxGroupMsgCount {
+// 		r.groupMsgSeq = 0
+// 	}
+// 	r.groupMsgList[r.groupMsgSeq] = &common.GroupMessage{C: make(chan struct{})}
+// 	r.groupMsgSync.Unlock()
 
-	gmsg.GroupName = groupName
-	gmsg.Header = header
-	gmsg.MsgID = msgID
-	if cap(gmsg.MsgData) < len(data) {
-		gmsg.MsgData = make([]byte, 0, len(data))
-	}
-	gmsg.MsgData = gmsg.MsgData[:len(data)]
-	copy(gmsg.MsgData, data)
+// 	gmsg.GroupName = groupName
+// 	gmsg.Header = header
+// 	gmsg.MsgID = msgID
+// 	if cap(gmsg.MsgData) < len(data) {
+// 		gmsg.MsgData = make([]byte, 0, len(data))
+// 	}
+// 	gmsg.MsgData = gmsg.MsgData[:len(data)]
+// 	copy(gmsg.MsgData, data)
 
-	close(gmsg.C)
-}
+// 	close(gmsg.C)
+// }
 
 func (r *server) getFreeConnection() *connection {
 	return connectionPool.Get().(*connection)

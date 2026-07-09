@@ -64,9 +64,6 @@ func validateConfig() {
 }
 
 func validateClientConfig(opt *gsinf.KcpClientConfig) {
-	if opt.PoolSize <= 0 {
-		opt.PoolSize = 30
-	}
 	if opt.GoReadWriteBufferSize <= 0 {
 		opt.GoReadWriteBufferSize = 4096
 	} else if opt.GoReadWriteBufferSize > 65535 {

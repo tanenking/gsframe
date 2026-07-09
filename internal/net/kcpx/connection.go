@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/tanenking/gsframe/gsinf"
 	"github.com/tanenking/gsframe/internal/constants"
 	"github.com/tanenking/gsframe/internal/logger"
 	"github.com/tanenking/gsframe/internal/net/common"
@@ -33,8 +34,8 @@ type connection struct {
 
 	writeBufferList chan *common.Message
 
-	groupMsgSeq uint16
-	groupMap    sync.Map
+	// groupMsgSeq uint16
+	// groupMap    sync.Map
 }
 
 func newConnection() *connection {
@@ -54,21 +55,22 @@ func (c *connection) init(_server *server, conn *kcp.UDPSession, connId int32) b
 
 	c.writeBufferList = make(chan *common.Message, config.WriteMessageBufferLen)
 
-	c.groupMsgSeq = c._server.groupMsgSeq
-	c.groupMap = sync.Map{}
+	// c.groupMsgSeq = c._server.groupMsgSeq
+	// c.groupMap = sync.Map{}
 
-	conn.SetReadDeadline(time.Time{})
-	conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
+	c.conn.SetReadDeadline(time.Time{})
+	c.conn.SetWriteDeadline(time.Now().Add(config.WriteTimeout))
 
-	conn.SetRateLimit(0)
-	conn.SetStreamMode(config.StreamMode)
-	conn.SetNoDelay(1, 20, 2, 1)
-	conn.SetACKNoDelay(false)
-	conn.SetWindowSize(2048, 2048)
-	conn.SetMtu(1472)
+	c.conn.SetRateLimit(0)
+	c.conn.SetStreamMode(config.StreamMode)
+	c.conn.SetNoDelay(1, 10, 2, 1)
+	c.conn.SetACKNoDelay(true)
+	c.conn.SetWindowSize(1024, 1024)
+	c.conn.SetMtu(1472)
+	c.conn.SetWriteDelay(true)
 
-	conn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
-	conn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
+	c.conn.SetReadBuffer(int(config.TcpReadWriteBufferSize))
+	c.conn.SetWriteBuffer(int(config.TcpReadWriteBufferSize))
 
 	return true
 }
@@ -94,24 +96,25 @@ func (c *connection) GetConnID() int32 {
 func (c *connection) IsValid() bool {
 	return atomic.LoadInt32(&c.closed) == 0 && c.conn != nil
 }
-func (c *connection) InGroup(groupName string) bool {
-	_, ok := c.groupMap.Load(groupName)
-	return ok
-}
-func (c *connection) AddGroup(groupName string) {
-	c.groupMap.Store(groupName, struct{}{})
-}
-func (c *connection) DeleteGroup(groupName string) {
-	c.groupMap.Delete(groupName)
-}
-func (c *connection) GetGroupList() []string {
-	list := []string{}
-	c.groupMap.Range(func(key, value any) bool {
-		list = append(list, key.(string))
-		return true
-	})
-	return list
-}
+
+// func (c *connection) InGroup(groupName string) bool {
+// 	_, ok := c.groupMap.Load(groupName)
+// 	return ok
+// }
+// func (c *connection) AddGroup(groupName string) {
+// 	c.groupMap.Store(groupName, struct{}{})
+// }
+// func (c *connection) DeleteGroup(groupName string) {
+// 	c.groupMap.Delete(groupName)
+// }
+// func (c *connection) GetGroupList() []string {
+// 	list := []string{}
+// 	c.groupMap.Range(func(key, value any) bool {
+// 		list = append(list, key.(string))
+// 		return true
+// 	})
+// 	return list
+// }
 
 // SetProperty 设置链接属性
 func (c *connection) SetProperty(key string, value interface{}) {
@@ -163,9 +166,9 @@ func (c *connection) start() {
 	constants.Go(func() {
 		c.startReader()
 	})
-	// constants.Go(func() {
-	// 	c.startWriter()
-	// })
+	constants.Go(func() {
+		c.startWriter()
+	})
 
 	<-c.ctx.Done()
 
@@ -173,7 +176,7 @@ func (c *connection) start() {
 	close(c.writeBufferList)
 
 	//关闭连接,将还未发送完的数据发完
-	// c.sendRest()
+	c.sendRest()
 
 	c.finalizer()
 }
@@ -218,9 +221,13 @@ func (c *connection) readMessage(bs *common.ByteBuffer) (err error) {
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *connection) startReader() {
 	defer constants.AutoRecover()()
-	logger.Log().Debug("kcp [Reader Goroutine is running] id = %d", c.connId)
-	defer logger.Log().Debug("kcp [Reader exit!] id = %d", c.connId)
 	defer c.Stop()
+
+	msg := common.CreateMessage(config.ByteOrder)
+	defer common.DeleteMessage(msg)
+
+	var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+	defer common.DeleteByteBuffer(bs)
 
 	for {
 		select {
@@ -229,24 +236,27 @@ func (c *connection) startReader() {
 		default:
 			ret := func() (ret bool) {
 				defer constants.AutoRecover()()
-				var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-				defer func() {
-					common.DeleteByteBuffer(bs)
-				}()
 				err := c.readMessage(bs)
 				if err != nil {
 					logger.Log().Error("kcp read error %v", err)
 					return
 				}
 				c.lastHeartTime = time.Now().Unix()
-				msg := common.CreateMessage(config.ByteOrder)
-				defer func() {
-					common.DeleteMessage(msg)
-				}()
 				err = msg.FromBytes(bs.Data)
 				if err != nil {
 					logger.Log().Error("kcp msg.FromBytes %v", err)
 					return
+				}
+				cmdid := int32(msg.Header >> 32)
+				cmd := int32(msg.Header & 0xffffffff)
+				if cmdid == gsinf.KcpControlCMD {
+					if cmd > 0 {
+						if config.MessageCallback != nil {
+							config.MessageCallback.HandleControl(c, cmd, msg.ID)
+						}
+					}
+					// logger.Log().Info(`handle control = %d,%s`, msg.Header, msg.ID)
+					return true
 				}
 				if config.MessageCallback != nil {
 					if !config.MessageCallback.PreHandle(c, msg) {
@@ -265,110 +275,105 @@ func (c *connection) startReader() {
 }
 
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
-// func (c *connection) startWriter() {
-// 	defer constants.AutoRecover()()
-// 	logger.Log().Debug("kcp [Writer Goroutine is running] id = %d", c.connId)
-// 	defer logger.Log().Debug("kcp [Writer exit!] id = %d", c.connId)
-// 	defer c.Stop()
+func (c *connection) startWriter() {
+	defer constants.AutoRecover()()
+	defer c.Stop()
 
-// 	//20秒检测一次,180秒视为连接关闭
-// 	var interval_impl = time.Second * 20
-// 	var _keeptimer = time.NewTimer(interval_impl)
+	//20秒检测一次,180秒视为连接关闭
+	var interval_impl = time.Second * 20
+	var _keeptimer = time.NewTimer(interval_impl)
 
-// 	gmsg := c._server.groupMsgList[c.groupMsgSeq]
-// 	for {
-// 		select {
-// 		case <-c.ctx.Done():
-// 			return
-// 		case <-_keeptimer.C:
-// 			if time.Now().Unix()-c.lastHeartTime >= config.HeartTimeoutSec {
-// 				logger.Log().Error("udp 心跳超时")
-// 				return
-// 			}
-// 			_keeptimer.Reset(interval_impl)
-// 		case msg, ok := <-c.writeBufferList:
-// 			ret := func() (ret bool) {
-// 				if ok {
-// 					defer func() {
-// 						common.DeleteMessage(msg)
-// 					}()
-// 					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-// 					defer func() {
-// 						common.DeleteByteBuffer(bs)
-// 					}()
-// 					if err := msg.ToBytes(bs); err != nil {
-// 						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
-// 						return
-// 					}
-// 					deadline := time.Now().Add(config.WriteTimeout)
-// 					c.conn.SetWriteDeadline(deadline)
-// 					_, err := c.conn.Write(bs.Data)
-// 					if err != nil {
-// 						logger.Log().Error(`kcp Write error %+v`, err)
-// 						return
-// 					}
-// 				} else {
-// 					logger.Log().Debug("writeBufferList is Closed")
-// 					return
-// 				}
-// 				return true
-// 			}()
-// 			if !ret {
-// 				return
-// 			}
-// 		case <-gmsg.C:
-// 			if c.InGroup(gmsg.GroupName) {
-// 				if c.Send(gmsg.Header, gmsg.MsgID, gmsg.MsgData) != nil {
-// 					return
-// 				}
-// 			}
-// 			c.groupMsgSeq++
-// 			if c.groupMsgSeq >= common.MaxGroupMsgCount {
-// 				c.groupMsgSeq = 0
-// 			}
-// 			gmsg = c._server.groupMsgList[c.groupMsgSeq]
-// 		}
-// 	}
-// }
+	var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+	defer common.DeleteByteBuffer(bs)
 
-// func (c *connection) sendRest() {
-// 	defer constants.AutoRecover()()
-// 	defer logger.Log().Debug("kcp [sendRest!] id = %d", c.connId)
-// 	for {
-// 		select {
-// 		case msg, ok := <-c.writeBufferList:
-// 			ret := func() (ret bool) {
-// 				if ok {
-// 					defer func() {
-// 						common.DeleteMessage(msg)
-// 					}()
-// 					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-// 					defer func() {
-// 						common.DeleteByteBuffer(bs)
-// 					}()
-// 					if err := msg.ToBytes(bs); err != nil {
-// 						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
-// 						return
-// 					}
-// 					_, err := c.conn.Write(bs.Data)
-// 					if err != nil {
-// 						logger.Log().Error(`kcp Write error %+v`, err)
-// 						return
-// 					}
-// 				} else {
-// 					logger.Log().Debug("writeBufferList is Closed")
-// 					return
-// 				}
-// 				return true
-// 			}()
-// 			if !ret {
-// 				return
-// 			}
-// 		default:
-// 			return
-// 		}
-// 	}
-// }
+	var ch = make(chan struct{})
+	// gmsg := c._server.groupMsgList[c.groupMsgSeq]
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-_keeptimer.C:
+			if time.Now().Unix()-c.lastHeartTime >= config.HeartTimeoutSec {
+				logger.Log().Error("udp 心跳超时")
+				return
+			}
+			_keeptimer.Reset(interval_impl)
+		case msg, ok := <-c.writeBufferList:
+			ret := func() (ret bool) {
+				if ok {
+					defer common.DeleteMessage(msg)
+					if err := msg.ToBytes(bs); err != nil {
+						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
+						return
+					}
+					deadline := time.Now().Add(config.WriteTimeout)
+					c.conn.SetWriteDeadline(deadline)
+					_, err := c.conn.Write(bs.Data)
+					if err != nil {
+						logger.Log().Error(`kcp Write error %+v`, err)
+						return
+					}
+				} else {
+					logger.Log().Debug("writeBufferList is Closed")
+					return
+				}
+				return true
+			}()
+			if !ret {
+				return
+			}
+		// case <-gmsg.C:
+		// 	if c.InGroup(gmsg.GroupName) {
+		// 		if c.Send(gmsg.Header, gmsg.MsgID, gmsg.MsgData) != nil {
+		// 			return
+		// 		}
+		// 	}
+		// 	c.groupMsgSeq++
+		// 	if c.groupMsgSeq >= common.MaxGroupMsgCount {
+		// 		c.groupMsgSeq = 0
+		// 	}
+		// 	gmsg = c._server.groupMsgList[c.groupMsgSeq]
+		case <-ch:
+		}
+	}
+}
+
+func (c *connection) sendRest() {
+	defer constants.AutoRecover()()
+	defer logger.Log().Debug("kcp [sendRest!] id = %d", c.connId)
+
+	var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+	defer common.DeleteByteBuffer(bs)
+
+	for {
+		select {
+		case msg, ok := <-c.writeBufferList:
+			ret := func() (ret bool) {
+				if ok {
+					defer common.DeleteMessage(msg)
+					if err := msg.ToBytes(bs); err != nil {
+						logger.Log().Error(`kcp 消息打包错误 %+v`, err)
+						return
+					}
+					_, err := c.conn.Write(bs.Data)
+					if err != nil {
+						logger.Log().Error(`kcp Write error %+v`, err)
+						return
+					}
+				} else {
+					logger.Log().Debug("writeBufferList is Closed")
+					return
+				}
+				return true
+			}()
+			if !ret {
+				return
+			}
+		default:
+			return
+		}
+	}
+}
 
 func (c *connection) finalizer() {
 	//如果当前链接已经关闭

@@ -5,11 +5,13 @@ import (
 	"time"
 )
 
+const KcpControlCMD int32 = 0x7fffffff
+
 // //////////////////////////////////////////////////////////////
 type IKcpServer interface {
 	GetConnection(connId int32) IKcpConnection
 	GetConnectionCount() int32
-	SendGroup(groupName string, header int64, msgID string, data []byte)
+	// SendGroup(groupName string, header int64, msgID string, data []byte)
 }
 
 type IKcpConnection interface {
@@ -17,10 +19,10 @@ type IKcpConnection interface {
 	GetConnID() int32
 	Stop()
 	IsValid() bool
-	InGroup(groupName string) bool
-	AddGroup(groupName string)
-	DeleteGroup(groupName string)
-	GetGroupList() []string
+	// InGroup(groupName string) bool
+	// AddGroup(groupName string)
+	// DeleteGroup(groupName string)
+	// GetGroupList() []string
 	SetProperty(key string, value interface{})
 	GetProperty(key string) (interface{}, error)
 	RemoveProperty(key string)
@@ -29,17 +31,22 @@ type IKcpConnection interface {
 
 type IKcpClient interface {
 	Send(header int64, msgID string, data []byte) error
+	SendControlMsg(cmd int32, msg string) error
+}
+
+type IKcpClientImpl interface {
+	Send(header int64, msgID string, data []byte) error
+	SendControlMsg(cmd int32, msg string) error
 }
 
 type IKcpClientMessageCallback interface {
-	Handle(msg IMessage) //处理conn业务的方法
+	Handle(client IKcpClientImpl, msg IMessage) //处理conn业务的方法
+	HandleControl(client IKcpClientImpl, cmd int32, msg string)
 }
 
 type KcpClientConfig struct {
 	// IP:Port
 	Address string
-	//连接池大小
-	PoolSize int
 	//go缓冲区大小
 	GoReadWriteBufferSize int32
 	//tcp缓冲区大小
@@ -58,6 +65,10 @@ type KcpClientConfig struct {
 	StreamMode bool
 	//字节序
 	ByteOrder binary.ByteOrder
+	//连接创建后的回调
+	OnConnectorCreate func(impl IKcpClientImpl)
+	//连接终止前的回调
+	OnConnectorStop func(impl IKcpClientImpl)
 	//消息处理回调
 	MessageCallback IKcpClientMessageCallback
 }
@@ -68,6 +79,7 @@ type IKcpConnectionMessageCallback interface {
 	PreHandle(conn IKcpConnection, msg IMessage) bool //在处理conn业务之前的钩子方法
 	Handle(conn IKcpConnection, msg IMessage)         //处理conn业务的方法
 	PostHandle(conn IKcpConnection, msg IMessage)     //处理conn业务之后的钩子方法
+	HandleControl(conn IKcpConnection, cmd int32, msg string)
 }
 
 type KcpServerConfig struct {

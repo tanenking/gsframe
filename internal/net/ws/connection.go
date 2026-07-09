@@ -254,6 +254,12 @@ func (c *connection) startReader() {
 	defer logger.Log().Debug("ws [Reader exit!] id = %d", c.connId)
 	defer c.Stop()
 
+	msg := common.CreateMessage(config.ByteOrder)
+	defer common.DeleteMessage(msg)
+
+	var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+	defer common.DeleteByteBuffer(bs)
+
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -261,10 +267,6 @@ func (c *connection) startReader() {
 		default:
 			ret := func() (ret bool) {
 				defer constants.AutoRecover()()
-				var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-				defer func() {
-					common.DeleteByteBuffer(bs)
-				}()
 				t, err := c.readMessage(bs)
 				if err != nil {
 					logger.Log().Error("ws read error %v", err)
@@ -282,10 +284,6 @@ func (c *connection) startReader() {
 					logger.Log().Debug("CloseMessage -> %s", string(bs.Data))
 					return
 				case websocket.BinaryMessage:
-					msg := common.CreateMessage(config.ByteOrder)
-					defer func() {
-						common.DeleteMessage(msg)
-					}()
 					err := msg.FromBytes(bs.Data)
 					if err != nil {
 						logger.Log().Error("ws msg.FromBytes %v", err)
@@ -342,6 +340,11 @@ func (c *connection) startWriter() {
 	var interval_impl = time.Second * 20
 	var _keeptimer = time.NewTimer(interval_impl)
 
+	var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+	defer common.DeleteByteBuffer(bs)
+
+	var ch = make(chan struct{})
+
 	gmsg := c._server.groupMsgList[c.groupMsgSeq]
 	for {
 		select {
@@ -362,13 +365,7 @@ func (c *connection) startWriter() {
 		case msg, ok := <-c.writeBufferList:
 			ret := func() (ret bool) {
 				if ok {
-					defer func() {
-						common.DeleteMessage(msg)
-					}()
-					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-					defer func() {
-						common.DeleteByteBuffer(bs)
-					}()
+					defer common.DeleteMessage(msg)
 					if err := msg.ToBytes(bs); err != nil {
 						logger.Log().Error(`消息打包错误 %+v`, err)
 						return
@@ -398,6 +395,7 @@ func (c *connection) startWriter() {
 				c.groupMsgSeq = 0
 			}
 			gmsg = c._server.groupMsgList[c.groupMsgSeq]
+		case <-ch:
 		}
 	}
 }
@@ -405,18 +403,16 @@ func (c *connection) startWriter() {
 func (c *connection) sendRest() {
 	defer constants.AutoRecover()()
 	defer logger.Log().Debug("ws [sendRest!] id = %d", c.connId)
+
+	var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
+	defer common.DeleteByteBuffer(bs)
+
 	for {
 		select {
 		case msg, ok := <-c.writeBufferList:
 			ret := func() (ret bool) {
 				if ok {
-					defer func() {
-						common.DeleteMessage(msg)
-					}()
-					var bs = common.CreateByteBuffer(int(config.MaxPacketSize))
-					defer func() {
-						common.DeleteByteBuffer(bs)
-					}()
+					defer common.DeleteMessage(msg)
 					if err := msg.ToBytes(bs); err != nil {
 						logger.Log().Error(`消息打包错误 %+v`, err)
 						return
