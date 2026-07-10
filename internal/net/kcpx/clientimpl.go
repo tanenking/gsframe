@@ -35,6 +35,8 @@ func createClientImpl(_client *client, connId int32) *clientImpl {
 	return impl
 }
 func (c *clientImpl) reconnect() {
+	defer constants.AutoRecover()()
+
 	if !atomic.CompareAndSwapInt32(&c.running, 0, 1) {
 		return
 	}
@@ -79,12 +81,12 @@ func (c *clientImpl) stop() {
 	})
 }
 func (c *clientImpl) isValid() bool {
-	return atomic.LoadInt32(&c.closed) == 0 && c.conn != nil
+	return atomic.LoadInt32(&c.running) > 0 && atomic.LoadInt32(&c.closed) == 0 && c.conn != nil
 }
 
 func (c *clientImpl) Send(header int64, msgID string, data []byte) error {
 	defer constants.AutoRecover()()
-	if c.closed > 0 {
+	if atomic.LoadInt32(&c.closed) > 0 {
 		return fmt.Errorf("kcp client %d closed when send buff msg", c.connId)
 	}
 
@@ -317,4 +319,6 @@ func (c *clientImpl) finalizer() {
 	c.running = 0
 
 	c.writeBufferList = nil
+
+	c._client.onImplError(c)
 }

@@ -30,6 +30,7 @@ type IKcpConnection interface {
 }
 
 type IKcpClient interface {
+	GetConnector(flag int32) IKcpClientImpl
 	Send(header int64, msgID string, data []byte) error
 	SendControlMsg(cmd int32, msg string) error
 }

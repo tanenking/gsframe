@@ -141,7 +141,7 @@ func (c *connection) RemoveProperty(key string) {
 
 func (c *connection) Send(header int64, msgID string, data []byte) error {
 	defer constants.AutoRecover()()
-	if c.closed > 0 {
+	if atomic.LoadInt32(&c.closed) > 0 {
 		return fmt.Errorf("kcp Connection %d closed when send buff msg", c.connId)
 	}
 
