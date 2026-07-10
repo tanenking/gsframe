@@ -247,18 +247,15 @@ func (c *connection) startReader() {
 					logger.Log().Error("kcp msg.FromBytes %v", err)
 					return
 				}
-				cmdid := int32(msg.Header >> 32)
-				cmd := int32(msg.Header & 0xffffffff)
-				if cmdid == gsinf.KcpControlCMD {
-					if cmd > 0 {
-						if config.MessageCallback != nil {
+				if config.MessageCallback != nil {
+					cmdid := int32(msg.Header >> 32)
+					cmd := int32(msg.Header & 0xffffffff)
+					if cmdid == gsinf.KcpControlCMD {
+						if cmd > 0 {
 							config.MessageCallback.HandleControl(c, cmd, msg.ID)
 						}
+						return true
 					}
-					// logger.Log().Info(`handle control = %d,%s`, msg.Header, msg.ID)
-					return true
-				}
-				if config.MessageCallback != nil {
 					if !config.MessageCallback.PreHandle(c, msg) {
 						return true
 					}

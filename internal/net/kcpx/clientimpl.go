@@ -191,17 +191,15 @@ func (c *clientImpl) startReader() {
 					logger.Log().Error("kcp client msg.FromBytes %v", err)
 					return
 				}
-				cmdid := int32(msg.Header >> 32)
-				cmd := int32(msg.Header & 0xffffffff)
-				if cmdid == gsinf.KcpControlCMD {
-					if cmd > 0 {
-						if c._client.opt.MessageCallback != nil {
+				if c._client.opt.MessageCallback != nil {
+					cmdid := int32(msg.Header >> 32)
+					cmd := int32(msg.Header & 0xffffffff)
+					if cmdid == gsinf.KcpControlCMD {
+						if cmd > 0 {
 							c._client.opt.MessageCallback.HandleControl(c, cmd, msg.ID)
 						}
+						return true
 					}
-					return true
-				}
-				if c._client.opt.MessageCallback != nil {
 					c._client.opt.MessageCallback.Handle(c, msg)
 				}
 				return true
