@@ -311,6 +311,7 @@ func (c *clientImpl) finalizer() {
 	c.conn.Close()
 	c.conn = nil
 
+	c.closed = 1
 	c.running = 0
 
 	c.writeBufferList = nil

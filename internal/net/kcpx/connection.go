@@ -383,6 +383,7 @@ func (c *connection) finalizer() {
 	c.conn.Close()
 	c.conn = nil
 
+	c.closed = 1
 	//将链接从连接管理器中删除
 	c._server.freeConnection(c)
 
