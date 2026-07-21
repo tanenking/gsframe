@@ -437,11 +437,6 @@ func (c *connection) sendRest() {
 	}
 }
 func (c *connection) finalizer() {
-	//如果当前链接已经关闭
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return
-	}
-
 	if config.OnConnectionStop != nil {
 		config.OnConnectionStop(c)
 	}

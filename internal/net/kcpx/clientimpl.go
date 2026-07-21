@@ -301,11 +301,6 @@ func (c *clientImpl) sendRest() {
 	}
 }
 func (c *clientImpl) finalizer() {
-	//如果当前链接已经关闭
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return
-	}
-
 	if c._client.opt.OnConnectorStop != nil {
 		c._client.opt.OnConnectorStop(c)
 	}
